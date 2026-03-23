@@ -1,0 +1,21 @@
+# ========================================
+# Input file - TDSE Crank-Nicolson solver
+# Atomic units: hbar=1, m=1
+# Lengths [bohr], Times [hbar/Eh], Energies [Eh], k [bohr^-1]
+# ========================================
+
+# Domain and grid
+L       20.0    # [bohr]      total domain length
+dx       0.01   # [bohr]      spatial step
+dt       0.001  # [hbar/Eh]   time step
+T_tot    2.0    # [hbar/Eh]   total simulation time
+
+# Gaussian wave packet
+x0       5.0    # [bohr]      initial position of packet center
+sigma    0.5    # [bohr]      packet width
+k0       5.0    # [bohr^-1]   initial momentum (rightward)
+
+# Potential barrier
+x_bar   10.0    # [bohr]      left edge of barrier
+w_bar    0.5    # [bohr]      barrier width
+V0      20.0    # [Eh]        barrier height

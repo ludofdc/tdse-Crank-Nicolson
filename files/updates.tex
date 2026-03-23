@@ -1,0 +1,107 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[english]{babel}
+\usepackage{hyperref}
+\hypersetup{hidelinks}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[varvw]{newtxmath}
+
+% page geometry — identical to thesis
+\setlength{\oddsidemargin}{8mm}
+\setlength{\textwidth}{145mm}
+\setlength{\topmargin}{2mm}
+\setlength{\textheight}{225mm}
+\setlength{\headheight}{0mm}
+\setlength{\parskip}{0.5mm}
+\setlength{\parindent}{9mm}
+\linespread{1.12}
+\renewcommand{\floatpagefraction}{.93}
+\renewcommand{\textfraction}{0.02}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\title{{\bf \Large TDSE-CN — Development Log}}
+\author{Ludovico Fecia di Cossato}
+\date{}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+\noindent\rule{\textwidth}{0.4pt}
+\vskip 2mm
+\noindent\textit{Session-by-session record of design decisions and implementation
+progress. Kept separate from the main article so that the official documentation
+remains clean and version-independent.}
+\vskip 2mm
+\noindent\rule{\textwidth}{0.4pt}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{21 March 2026 — Session 1}
+\textbf{Theory, project structure, input file, params module.}
+
+\begin{itemize}
+
+  \item Defined the physical scenario: 1D Gaussian wave packet propagating
+        toward a rectangular potential barrier, studied via the TDSE with
+        the Crank--Nicolson scheme.
+
+  \item Established the full theoretical roadmap in five blocks (0--5),
+        from the TDSE to the computation of observables
+        (norm, $\langle x\rangle$, $T$, $R$).
+
+  \item Discussed space-time discretisation: spatial grid
+        $x_j = j\,\Delta x$ and temporal grid $t_n = n\,\Delta t$;
+        $\psi(x,t)$ becomes a complex vector at each time step.
+        Introduced the centred finite-difference approximation for the
+        second spatial derivative and identified the time-level choice as
+        the key design decision (leading to Crank--Nicolson in block~2).
+
+  \item Defined the project directory structure:
+        \texttt{input/}, \texttt{src/}, \texttt{output/} (gitignored),
+        \texttt{analysis/}, \texttt{docs/}, \texttt{makefile}.
+
+  \item Wrote \texttt{input/input.txt} with all physical and numerical
+        parameters in atomic units
+        (\texttt{L}, \texttt{dx}, \texttt{dt}, \texttt{T\_tot},
+         \texttt{x0}, \texttt{sigma}, \texttt{k0},
+         \texttt{x\_bar}, \texttt{w\_bar}, \texttt{V0}).
+        Added inline unit annotations for each parameter.
+        Decision: all source comments in English.
+
+  \item Implemented \texttt{src/params.hpp}: \texttt{Params} struct with
+        fields for all input parameters plus derived quantities $N$
+        (grid points) and $M$ (time steps); function declarations using
+        \texttt{\#pragma once} (chosen over \texttt{\#ifndef} guards for
+        modern C++).
+
+  \item Implemented \texttt{src/params.cpp}: \texttt{read\_params()} reads
+        key--value pairs line by line, skipping \texttt{\#} comments;
+        computes $N$ and $M$ via \texttt{std::round} to avoid
+        floating-point truncation. \texttt{print\_params()} formats a
+        labelled summary to stdout.
+
+  \item Written minimal \texttt{src/tdse.cpp} calling
+        \texttt{read\_params()} and \texttt{print\_params()} to test the
+        I/O pipeline. Compiled successfully with \texttt{makefile} using
+        \texttt{g++ -std=c++17 -Wall -Wextra -O2}.
+
+  \item Produced project documentation:
+        \texttt{TDSE\_CN\_article.tex} (official article, no updates
+        section) and \texttt{TDSE\_CN\_updates.tex} (this file).
+
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+% Template for future entries — copy and fill in:
+%
+% \section*{DD Month YYYY — Session N}
+% \textbf{Short description of the session.}
+%
+% \begin{itemize}
+%   \item ...
+% \end{itemize}
+%
+% ─────────────────────────────────────────────────────────────────────────────
+
+\end{document}

@@ -1,0 +1,352 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[english]{babel}
+\usepackage{hyperref}
+\hypersetup{hidelinks}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{physics}
+\usepackage{bm}
+\usepackage[varvw]{newtxmath}
+\usepackage{booktabs}
+\usepackage{array}
+
+% page geometry — identical to thesis
+\setlength{\oddsidemargin}{8mm}
+\setlength{\textwidth}{145mm}
+\setlength{\topmargin}{2mm}
+\setlength{\textheight}{225mm}
+\setlength{\headheight}{0mm}
+\setlength{\parskip}{0.5mm}
+\setlength{\parindent}{9mm}
+\linespread{1.12}
+\renewcommand{\floatpagefraction}{.93}
+\renewcommand{\textfraction}{0.02}
+
+% ── convenience macros ───────────────────────────────────────────────────────
+\newcommand{\dt}{\Delta t}
+\newcommand{\dx}{\Delta x}
+\newcommand{\Hhat}{\hat{H}}
+
+% ── title block ─────────────────────────────────────────────────────────────
+\title{{\bf \Large
+    Numerical Simulation of 1D Quantum Tunnelling\\[2mm]
+    via the Time-Dependent Schr\"{o}dinger Equation}}
+\author{Ludovico Fecia di Cossato\\[1mm]}
+\date{March 2026}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+\begin{center}
+  \small\textit{Atomic units throughout: $\hbar = 1$, $m = 1$.}
+\end{center}
+
+\vskip 50mm
+\noindent\rule{\textwidth}{0.4pt}
+
+% ── Abstract ─────────────────────────────────────────────────────────────────
+\begin{abstract}
+This document describes the design and implementation of a one-dimensional
+solver for the Time-Dependent Schr\"{o}dinger Equation (TDSE) based on the
+Crank--Nicolson finite-difference scheme.
+The physical objective is to simulate the time evolution of a Gaussian wave
+packet interacting with a rectangular potential barrier, resolving the quantum
+tunnelling phenomenon and extracting the transmission and reflection
+coefficients as functions of the barrier parameters.
+The solver is implemented in C++17 with LAPACKE for the tridiagonal complex
+linear system; post-processing is handled by Python scripts.
+\end{abstract}
+
+\noindent\rule{\textwidth}{0.4pt}
+\vskip 4mm
+
+\newpage
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Physical Background}
+
+\subsection{The wave function}
+
+The state of a non-relativistic quantum particle in one spatial dimension is
+completely described by a complex-valued wave function $\psi(x,t)$.
+Its squared modulus $|\psi(x,t)|^2$ is the probability density of finding the
+particle at position $x$ at time $t$.
+Physical consistency requires the normalisation condition to hold at all times:
+\begin{equation}
+  \int_{-\infty}^{+\infty} |\psi(x,t)|^2 \, dx = 1.
+\end{equation}
+Any admissible time-evolution operator must therefore be \emph{unitary},
+preserving the norm of $\psi$ exactly.
+This provides the primary numerical verification criterion: if the norm drifts,
+the solver contains an error.
+
+\subsection{The Time-Dependent Schr\"{o}dinger Equation}
+
+In atomic units ($\hbar = 1$, $m = 1$), the TDSE in one spatial dimension reads:
+\begin{equation}
+  i\,\frac{\partial\psi}{\partial t}
+  = \hat{H}\psi
+  = \left[-\frac{1}{2}\frac{\partial^2}{\partial x^2} + V(x)\right]\psi.
+\end{equation}
+The left-hand side governs time evolution; the right-hand side is the
+Hamiltonian operator $\hat{H}$, composed of the kinetic energy operator
+$-\tfrac{1}{2}\partial^2/\partial x^2$ and the potential energy $V(x)$ acting
+multiplicatively.
+The formal solution is $\psi(x,t) = e^{-i\hat{H}t}\,\psi(x,0)$, where the
+time-evolution operator cannot be computed analytically for a general $V(x)$,
+motivating the numerical approach.
+
+\subsection{The Gaussian wave packet}
+
+The most natural initial condition for a scattering problem is a
+\emph{Gaussian wave packet} — a spatially localised state with a well-defined
+mean momentum.
+In atomic units:
+\begin{equation}
+  \psi(x,0)
+  = \bigl(2\pi\sigma^2\bigr)^{-1/4}
+    \exp\!\left[-\frac{(x-x_0)^2}{4\sigma^2}\right]
+    \exp(ik_0 x).
+\end{equation}
+The three parameters have clear physical interpretations.
+$x_0$ is the initial position of the packet centre;
+$\sigma$ controls its spatial width (and inversely its momentum spread, via the
+Heisenberg uncertainty relation $\Delta x\,\Delta p \ge \tfrac{1}{2}$);
+$k_0$ is the central wave vector, setting the mean momentum $\langle p\rangle = k_0$
+and therefore the direction and speed of propagation.
+The prefactor ensures unit normalisation.
+
+\subsection{The rectangular potential barrier}
+
+The potential studied here is a rectangular barrier of height $V_0$, left edge
+at $x_\mathrm{bar}$, and width $w_\mathrm{bar}$:
+\begin{equation}
+  V(x) =
+  \begin{cases}
+    V_0 & x_\mathrm{bar} \le x \le x_\mathrm{bar} + w_\mathrm{bar},\\
+    0   & \text{otherwise.}
+  \end{cases}
+\end{equation}
+Classically, a particle with kinetic energy $E < V_0$ is always reflected.
+Quantum mechanically, the wave function has a non-zero amplitude inside and
+beyond the barrier, leading to a finite transmission probability $T > 0$.
+This is \emph{quantum tunnelling} — one of the most striking departures from
+classical mechanics and the central phenomenon this project aims to simulate.
+The transmission probability decreases exponentially with the barrier width
+$w_\mathrm{bar}$, making it a sensitive probe of the solver's accuracy.
+
+\subsection{Observables}
+
+Once the time evolution of $\psi$ is known, the physically relevant quantities
+are extracted as expectation values or integrated quantities:
+
+\vskip 2mm
+\begin{center}
+\begin{tabular}{lll}
+  \toprule
+  Observable & Definition & Physical meaning \\
+  \midrule
+  Norm        & $\int|\psi|^2\,dx$                  & Must equal 1 at all times \\
+  $\langle x\rangle(t)$ & $\int x|\psi|^2\,dx$     & Mean position of the particle \\
+  $T$         & $\int_{x > x_\mathrm{bar}+w_\mathrm{bar}}|\psi|^2\,dx$ & Transmission probability \\
+  $R$         & $\int_{x < x_\mathrm{bar}}|\psi|^2\,dx$ & Reflection probability \\
+  \bottomrule
+\end{tabular}
+\end{center}
+\vskip 2mm
+
+\noindent
+A well-functioning solver must satisfy $T + R \approx 1$ at all times —
+probability conservation expressed in terms of scattering coefficients.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Space-Time Discretisation}
+
+The TDSE is a partial differential equation in two continuous variables $x$ and
+$t$.
+To solve it numerically, both must be replaced by a finite grid.
+
+\subsection{Spatial grid}
+
+The physical domain $[0, L]$ is divided into $N$ equal subintervals of width
+$\dx = L/N$.
+The grid points are $x_j = j\dx$ for $j = 0, 1, \ldots, N$.
+At any fixed time $t$, the wave function becomes a vector of $N+1$ complex
+numbers:
+\begin{equation}
+  \psi_j(t) \;\equiv\; \psi(x_j,\,t), \qquad j = 0,1,\ldots,N.
+\end{equation}
+The boundary conditions $\psi(0,t) = \psi(L,t) = 0$ model an infinite potential
+well — the particle is confined to the domain.
+This fixes the two endpoints and leaves $N-1$ internal degrees of freedom to
+evolve.
+
+\subsection{Temporal grid}
+
+Time is discretised with a uniform step $\dt$.
+The simulation runs from $t=0$ to $t = T_\mathrm{tot}$ in
+$M = T_\mathrm{tot}/\dt$ steps.
+The state at step $n$ is written $\psi_j^n \equiv \psi(x_j, t_n)$.
+The central question becomes: given $\psi^n$ (the state now), how is
+$\psi^{n+1}$ (the state one step later) computed?
+
+\subsection{Finite-difference approximation of derivatives}
+
+The time derivative is approximated by a forward difference:
+\begin{equation}
+  \frac{\partial\psi}{\partial t}\bigg|_{x_j,\,t_n}
+  \approx \frac{\psi_j^{n+1} - \psi_j^n}{\dt}.
+\end{equation}
+The second spatial derivative is approximated by the standard centred
+three-point formula:
+\begin{equation}
+  \frac{\partial^2\psi}{\partial x^2}\bigg|_{x_j}
+  \approx \frac{\psi_{j-1} - 2\psi_j + \psi_{j+1}}{\dx^2},
+\end{equation}
+which has truncation error $\mathcal{O}(\dx^2)$, as verified by Taylor
+expansion.
+The key remaining choice — at which time level to evaluate the spatial
+derivative — determines the stability and unitarity of the scheme, and is the
+subject of the next section.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{The Crank--Nicolson Scheme}
+
+\subsection{Motivation and construction}
+
+A purely explicit scheme evaluates the spatial derivative at time $t_n$;
+a purely implicit scheme evaluates it at $t_{n+1}$.
+Neither alone preserves the norm of $\psi$.
+The \emph{Crank--Nicolson} scheme takes the average of both, effectively
+evaluating the Hamiltonian at the midpoint $t_{n+1/2}$.
+Substituting into the discretised TDSE:
+\begin{equation}
+  i\,\frac{\psi^{n+1} - \psi^n}{\dt}
+  = \frac{1}{2}\hat{H}_\mathrm{disc}\bigl(\psi^{n+1} + \psi^n\bigr).
+\end{equation}
+Rearranging, one obtains a linear system to be solved at each time step:
+\begin{equation}
+  A\,\psi^{n+1} = B\,\psi^n,
+\end{equation}
+where the matrices $A$ and $B$ are:
+\begin{equation}
+  A = I + \frac{i\dt}{2}\hat{H}_\mathrm{disc}, \qquad
+  B = I - \frac{i\dt}{2}\hat{H}_\mathrm{disc}.
+\end{equation}
+Note that $B = A^\dagger$ (the conjugate transpose of $A$).
+This immediately implies that the scheme is \emph{unitary}:
+$\|\psi^{n+1}\| = \|\psi^n\|$ exactly, independent of the choice of $\dt$
+and $\dx$.
+
+\subsection{Tridiagonal structure and solution}
+
+Because the finite-difference kinetic operator only couples each point to its
+two neighbours, both $A$ and $B$ are \emph{tridiagonal} matrices of size
+$(N-1)\times(N-1)$.
+Setting $r = i\dt/(4\dx^2)$, the diagonals are:
+\begin{align}
+  A:\quad & \text{main diagonal} = 1 + 2r + \tfrac{i\dt}{2}V_j, \qquad
+            \text{off-diagonals} = -r, \notag\\
+  B:\quad & \text{main diagonal} = 1 - 2r - \tfrac{i\dt}{2}V_j, \qquad
+            \text{off-diagonals} = +r. \notag
+\end{align}
+At each time step, the right-hand side vector
+$\mathbf{b}^n = B\,\psi^n$ is computed by a matrix-vector multiplication,
+and the tridiagonal system $A\,\psi^{n+1} = \mathbf{b}^n$ is solved using the
+LAPACK routine \texttt{LAPACKE\_zgtsv}, which operates on
+\texttt{std::complex<double>} arrays and exploits the tridiagonal structure
+for $\mathcal{O}(N)$ cost per time step.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Project Structure and Parameters}
+
+\subsection{Implementation blocks}
+
+The solver is organised in five logical blocks, each building on the previous:
+
+\vskip 2mm
+\begin{center}
+\begin{tabular}{ll}
+  \toprule
+  Block & Content \\
+  \midrule
+  0 — Physics        & TDSE, Hamiltonian, observables \\
+  1 — Discretisation & Spatial and temporal grid, $\psi$ as a complex vector \\
+  2 — Crank--Nicolson & Implicit/explicit averaging, matrices $A$ and $B$ \\
+  3 — Linear system  & Tridiagonal structure, \texttt{LAPACKE\_zgtsv} solver \\
+  4 — Initial cond.  & Gaussian wave packet, boundary conditions $\psi = 0$ \\
+  5 — Observables    & Norm, $\langle x\rangle$, $T$, $R$ — verification and output \\
+  \bottomrule
+\end{tabular}
+\end{center}
+\vskip 2mm
+
+\subsection{Source layout}
+
+The C++17 codebase follows a clean separation between data, logic, and
+execution:
+\begin{verbatim}
+TDSE_CN/
+|-- input/input.txt        # physical and numerical parameters
+|-- src/params.hpp/.cpp    # Params struct, file I/O, printing
+|-- src/physics.hpp/.cpp   # grid, wave packet, matrices, time step
+|-- src/tdse.cpp           # main: orchestration
+|-- output/                # generated data (gitignored)
+|-- analysis/              # Python plotting scripts
+|-- docs/                  # figures and reports
++-- makefile
+\end{verbatim}
+
+\subsection{Input parameters}
+
+All physical and numerical parameters are read from a plain-text file at
+runtime, with no hardcoded values in the source.
+Parameters are listed below with their units in the atomic system
+($\hbar = 1$, $m = 1$):
+
+\vskip 2mm
+\begin{center}
+\begin{tabular}{llll}
+  \toprule
+  Parameter & Symbol & Unit & Description \\
+  \midrule
+  \texttt{L}     & $L$               & bohr          & Total domain length \\
+  \texttt{dx}    & $\dx$             & bohr          & Spatial step \\
+  \texttt{dt}    & $\dt$             & $\hbar/E_h$   & Time step \\
+  \texttt{T\_tot}& $T_\mathrm{tot}$  & $\hbar/E_h$   & Total simulation time \\
+  \texttt{x0}    & $x_0$             & bohr          & Initial packet centre \\
+  \texttt{sigma} & $\sigma$          & bohr          & Packet width \\
+  \texttt{k0}    & $k_0$             & bohr$^{-1}$   & Initial wave vector \\
+  \texttt{x\_bar}& $x_\mathrm{bar}$  & bohr          & Left edge of barrier \\
+  \texttt{w\_bar}& $w_\mathrm{bar}$  & bohr          & Barrier width \\
+  \texttt{V0}    & $V_0$             & $E_h$         & Barrier height \\
+  \bottomrule
+\end{tabular}
+\end{center}
+\vskip 2mm
+
+\noindent
+The derived quantities $N = \mathrm{round}(L/\dx)$ and
+$M = \mathrm{round}(T_\mathrm{tot}/\dt)$ are computed automatically from the
+input using \texttt{std::round} to avoid off-by-one errors from floating-point
+division.
+
+\subsection{Parameter selection guidelines}
+
+The input values are not arbitrary — a physically meaningful simulation
+requires the following hierarchy.
+The packet width $\sigma$ must be large enough to constitute a well-defined
+localised state but small enough to fit away from the domain boundaries at
+$t=0$.
+The initial position $x_0$ must be far enough from the barrier to allow the
+packet to form before impact.
+The kinetic energy $E \sim k_0^2/2$ should be comparable to $V_0$ to produce
+interesting tunnelling behaviour: if $E \gg V_0$ the barrier is transparent;
+if $E \ll V_0$ essentially nothing tunnels.
+Although Crank--Nicolson is unconditionally stable, $\dt$ must be chosen small
+enough for accuracy.
+
+\end{document}

@@ -1,0 +1,13 @@
+# Compiled output
+tdse
+*.o
+*.d
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Output files
+output/

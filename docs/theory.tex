@@ -1,0 +1,1306 @@
+\documentclass[12pt, a4paper]{article}
+
+% ── Encoding & language ────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+
+% ── Mathematics ────────────────────────────────────────────────────────────
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}          % dcases, prescript, etc.
+\usepackage{physics}            % \bra, \ket, \norm, \abs, \dv, \pdv
+
+% ── Figures & layout ───────────────────────────────────────────────────────
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+
+% ── Hyperlinks ─────────────────────────────────────────────────────────────
+\usepackage[colorlinks=true, linkcolor=blue!70!black,
+            citecolor=blue!70!black, urlcolor=blue!70!black]{hyperref}
+
+% ── Code listings ──────────────────────────────────────────────────────────
+\usepackage{listings}
+\usepackage{xcolor}
+\lstset{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue!80!black}\bfseries,
+  commentstyle=\color{gray},
+  stringstyle=\color{green!50!black},
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny\color{gray}
+}
+
+% ── Custom commands ────────────────────────────────────────────────────────
+\newcommand{\dt}{\Delta t}
+\newcommand{\dx}{\Delta x}
+\newcommand{\hb}{\hbar}
+\newcommand{\ii}{\mathrm{i}}          % imaginary unit (upright)
+\newcommand{\ee}{\mathrm{e}}          % Euler's number (upright)
+\newcommand{\CN}{Crank--Nicolson}
+\newcommand{\Htop}{\hat{H}}
+\newcommand{\Ktop}{\hat{K}}
+\newcommand{\Vtop}{\hat{V}}
+
+% ── Bibliography ───────────────────────────────────────────────────────────
+\usepackage[numbers, sort&compress]{natbib}
+
+% ───────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+% ── Title page ─────────────────────────────────────────────────────────────
+\begin{titlepage}
+  \centering
+  \vspace*{3cm}
+  {\LARGE\bfseries Numerical Solution of the Time-Dependent\\[6pt]
+   Schr\"{o}dinger Equation\\[4pt]
+   via the Crank--Nicolson Scheme\par}
+  \vspace{1.5cm}
+  {\large Quantum tunnelling of a Gaussian wave packet\\
+   through a rectangular potential barrier\par}
+  \vspace{2cm}
+  {\large Ludovico Fecia di Cossato\par}
+  \vfill
+  {\large\itshape TDSE\_CN — theoretical notes\par}
+  \vspace{0.5cm}
+  {\normalsize Atomic units throughout: $\hbar = m_e = e = 1$\par}
+  \vspace{1cm}
+  {\normalsize \today\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Introduction}
+% ═══════════════════════════════════════════════════════════════════════════
+
+The time-dependent Schr\"{o}dinger equation (TDSE) governs the evolution of
+any non-relativistic quantum system.  Even in one spatial dimension, it
+exhibits phenomena — wave packet spreading, interference, and quantum
+tunnelling — that have no classical analogue and are central to modern
+physics and technology (tunnel diodes, scanning tunnelling microscopy,
+nuclear alpha decay, \ldots).
+
+Despite its conceptual depth, the one-dimensional TDSE with a static
+potential is fully tractable numerically: the problem reduces to propagating
+a complex vector in time via a sequence of sparse linear systems.  This
+makes it an ideal testbed for implicit finite-difference methods and for
+developing intuition about quantum dynamics.
+
+These notes describe the physical setup, the mathematical structure of the
+\CN{} discretisation, and the Thomas algorithm used to solve the resulting
+tridiagonal system at each time step.  A final section analyses the output
+of the numerical simulation qualitatively and quantitatively.
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Physical setup}
+% ═══════════════════════════════════════════════════════════════════════════
+
+\subsection{The time-dependent Schr\"{o}dinger equation}
+
+The state of a one-dimensional quantum particle is fully described by a
+complex-valued wave function $\psi(x,t) \in L^2(\mathbb{R})$.  Its
+time evolution is governed by the TDSE
+\begin{equation}
+  \ii\hbar\,\pdv{\psi}{t}(x,t) \;=\; \Htop\,\psi(x,t),
+  \label{eq:tdse}
+\end{equation}
+where the Hamiltonian operator $\Htop = \Ktop + \Vtop$ splits into a
+kinetic part
+\begin{equation}
+  \Ktop \;=\; -\frac{\hbar^2}{2m}\pdv[2]{}{x}
+\end{equation}
+and a potential energy operator $\Vtop = V(x)$ acting multiplicatively.
+
+In \textbf{atomic units} ($\hbar = m_e = 1$) — used throughout this
+document — equation \eqref{eq:tdse} becomes
+\begin{equation}
+  \ii\,\pdv{\psi}{t} \;=\;
+  \left[-\frac{1}{2}\pdv[2]{}{x} + V(x)\right]\psi.
+  \label{eq:tdse_au}
+\end{equation}
+
+\subsection{Physical interpretation of the wave function}
+
+The wave function $\psi(x,t)$ is not directly observable.  The physically
+meaningful quantity is the \emph{probability density}
+\begin{equation}
+  \rho(x,t) \;=\; |\psi(x,t)|^2,
+\end{equation}
+which gives the probability of finding the particle between $x$ and $x+dx$
+as $\rho(x,t)\,dx$.  The total probability is conserved:
+\begin{equation}
+  \int_{-\infty}^{+\infty} |\psi(x,t)|^2\,dx \;=\; 1
+  \quad \forall\, t.
+  \label{eq:norm}
+\end{equation}
+This constraint — the \emph{norm conservation} or \emph{unitarity} of the
+evolution — is one of the most important consistency checks for any
+numerical scheme.
+
+\subsection{The Gaussian wave packet}
+
+The initial state chosen for this simulation is a \emph{Gaussian wave
+packet}, the quantum state that most closely mimics a classical particle
+with a definite position and momentum:
+\begin{equation}
+  \psi(x,0) \;=\; A\,\exp\!\left[-\frac{(x-x_0)^2}{4\sigma^2}\right]
+  \exp\!\left(\ii k_0 x\right),
+  \label{eq:gauss}
+\end{equation}
+where:
+\begin{itemize}
+  \item $x_0$ is the initial position of the packet centre,
+  \item $\sigma$ is the spatial width (standard deviation of $\rho$),
+  \item $k_0$ is the central wave vector, corresponding to mean momentum
+        $\langle p\rangle = \hbar k_0$,
+  \item $A = (2\pi\sigma^2)^{-1/4}$ is the normalisation constant.
+\end{itemize}
+
+The Gaussian is the \emph{minimum-uncertainty state}: it saturates the
+Heisenberg uncertainty relation $\Delta x\,\Delta p \geq \hbar/2$.  Its
+Fourier transform is also a Gaussian, centred at $k_0$ with width
+$1/(2\sigma)$, so the momentum spread is $\Delta p = \hbar/(2\sigma)$.
+
+The mean kinetic energy of the packet is
+\begin{equation}
+  E \;=\; \frac{\langle p\rangle^2}{2m} \;=\; \frac{k_0^2}{2}
+  \quad \text{(atomic units)}.
+  \label{eq:energy}
+\end{equation}
+This is the quantity to compare against the barrier height $V_0$ in order
+to classify the dynamical regime.
+
+\subsection{The rectangular potential barrier}
+
+The external potential is a rectangular barrier of height $V_0$ and width
+$w$ located at $x \in [x_\text{bar},\, x_\text{bar}+w]$:
+\begin{equation}
+  V(x) \;=\;
+  \begin{cases}
+    V_0 & \text{if } x_\text{bar} < x < x_\text{bar} + w, \\
+    0   & \text{otherwise.}
+  \end{cases}
+  \label{eq:barrier}
+\end{equation}
+The barrier is the simplest non-trivial scattering potential and admits an
+exact analytic solution for plane-wave states (see
+Section~\ref{sec:tunnelling}), making it ideal for validating the
+numerics.
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Quantum tunnelling}
+\label{sec:tunnelling}
+% ═══════════════════════════════════════════════════════════════════════════
+
+\subsection{Stationary analysis}
+
+For a monochromatic plane wave $\psi(x) = \ee^{\ii kx}$ with energy
+$E = k^2/2$, the Schr\"{o}dinger equation can be solved piecewise in
+each region.  Matching wave functions and their derivatives at the
+barrier edges yields the exact transmission coefficient \cite{Griffiths2018}
+\begin{equation}
+  T \;=\; \left[1 + \frac{V_0^2\sinh^2(\kappa w)}{4E(V_0-E)}\right]^{-1}
+  \qquad (E < V_0),
+  \label{eq:T_tunnelling}
+\end{equation}
+where $\kappa = \sqrt{2(V_0-E)}$ (atomic units) is the evanescent decay
+constant inside the barrier.  The reflection coefficient is simply
+$R = 1 - T$.
+
+Several qualitative features are immediately apparent from
+\eqref{eq:T_tunnelling}:
+\begin{enumerate}
+  \item $T > 0$ even when $E < V_0$ — this is \emph{quantum tunnelling}.
+        Classically, the particle cannot penetrate a region where $E < V$.
+  \item $T$ decays \emph{exponentially} with barrier width: for
+        $\kappa w \gg 1$,
+        \begin{equation}
+          T \;\approx\; 16\,\frac{E}{V_0}\!\left(1 - \frac{E}{V_0}\right)
+          \ee^{-2\kappa w}.
+        \end{equation}
+  \item In the above-barrier regime $E > V_0$, partial reflection still
+        occurs due to the wave nature of $\psi$, with
+        \begin{equation}
+          T \;=\; \left[1 + \frac{V_0^2\sin^2(k' w)}{4E(E-V_0)}\right]^{-1},
+          \quad k' = \sqrt{2(E-V_0)}.
+        \end{equation}
+        Resonant transmission ($T = 1$) occurs whenever $k'w = n\pi$.
+\end{enumerate}
+
+\subsection{Wave-packet dynamics}
+
+A Gaussian wave packet is a superposition of plane waves:
+\begin{equation}
+  \psi(x,0) \;=\; \int_{-\infty}^{+\infty}
+  \tilde{\phi}(k)\,\ee^{\ii kx}\,\frac{dk}{2\pi},
+  \qquad
+  \tilde{\phi}(k) \propto \ee^{-(k-k_0)^2\sigma^2}\,\ee^{-\ii k x_0}.
+\end{equation}
+Each component $k$ evolves independently and interacts with the barrier
+with its own coefficient $T(k)$.  After the scattering event, the total
+wave function splits into a \emph{reflected} part travelling to the left
+and a \emph{transmitted} part travelling to the right.
+
+The integrated probabilities
+\begin{align}
+  R(t) &= \int_{-\infty}^{x_\text{bar}} |\psi(x,t)|^2\,dx, \\
+  T(t) &= \int_{x_\text{bar}}^{+\infty} |\psi(x,t)|^2\,dx
+\end{align}
+approach constant asymptotic values after the scattering is complete.
+These asymptotic values can be compared to the plane-wave formula
+\eqref{eq:T_tunnelling} evaluated at $k = k_0$ — agreement is expected
+when the packet is narrow in $k$-space (large $\sigma$).
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Numerical method}
+% ═══════════════════════════════════════════════════════════════════════════
+
+\subsection{Spatial discretisation}
+
+The domain $[x_\text{min},\, x_\text{max}]$ is divided into $N$ uniformly
+spaced points with grid spacing $\dx = L/(N-1)$, where $L =
+x_\text{max} - x_\text{min}$.  The wave function is represented as the
+vector $\boldsymbol{\psi}^n \in \mathbb{C}^N$ with components
+$\psi_i^n \approx \psi(x_i, n\dt)$.
+
+The second derivative is replaced by the standard symmetric
+second-order finite-difference stencil:
+\begin{equation}
+  \pdv[2]{\psi}{x}\bigg|_{x_i}
+  \;\approx\;
+  \frac{\psi_{i-1} - 2\psi_i + \psi_{i+1}}{\dx^2}
+  + \mathcal{O}(\dx^2).
+  \label{eq:fd_stencil}
+\end{equation}
+This approximates the kinetic part of $\Htop$ as a real symmetric
+tridiagonal matrix $K$ with main diagonal $-2/\dx^2$ and off-diagonals
+$+1/\dx^2$ (multiplied by $-1/2$):
+\begin{equation}
+  [H_\text{disc}]_{ij}
+  \;=\;
+  -\frac{1}{2\dx^2}\begin{pmatrix}
+    -2 & 1 \\
+    1 & -2 & 1 \\
+      & \ddots & \ddots & \ddots \\
+      &        & 1 & -2 & 1 \\
+      &        &   & 1  & -2
+  \end{pmatrix}_{ij}
+  + V_i\,\delta_{ij}.
+  \label{eq:Hdisc}
+\end{equation}
+
+\subsection{Time discretisation: the Crank--Nicolson scheme}
+
+A naive explicit (forward-Euler) discretisation of the TDSE,
+\begin{equation}
+  \boldsymbol{\psi}^{n+1} = \boldsymbol{\psi}^n
+  - \ii\dt\, H_\text{disc}\,\boldsymbol{\psi}^n,
+\end{equation}
+is \emph{conditionally stable}: the time step must satisfy
+$\dt \lesssim \dx^2$, which for $\dx = 0.01$\,bohr means
+$\dt \lesssim 10^{-4}$\,a.u. — two orders of magnitude smaller than the
+\CN{} step used here.  Moreover, the explicit scheme does not conserve
+the norm exactly.
+
+The \textbf{\CN{} scheme} \cite{CrankNicolson1947} is an implicit
+second-order method that averages the right-hand side between the current
+and the next time level:
+\begin{equation}
+  \ii\,\frac{\boldsymbol{\psi}^{n+1} - \boldsymbol{\psi}^n}{\dt}
+  \;=\;
+  \frac{H_\text{disc}}{2}\!\left(\boldsymbol{\psi}^{n+1}
+  + \boldsymbol{\psi}^n\right).
+  \label{eq:cn_raw}
+\end{equation}
+Rearranging \eqref{eq:cn_raw}:
+\begin{equation}
+  \underbrace{\left(I + \frac{\ii\dt}{2}\,H_\text{disc}\right)}_{A}
+  \boldsymbol{\psi}^{n+1}
+  \;=\;
+  \underbrace{\left(I - \frac{\ii\dt}{2}\,H_\text{disc}\right)}_{B}
+  \boldsymbol{\psi}^n,
+  \label{eq:cn_system}
+\end{equation}
+which is a linear system $A\,\boldsymbol{\psi}^{n+1} = \mathbf{b}^n$
+with $\mathbf{b}^n = B\,\boldsymbol{\psi}^n$.
+
+\subsection{Properties of the Crank--Nicolson scheme}
+\label{sec:cn_properties}
+
+\paragraph{Unconditional stability.}
+The eigenvalues of $H_\text{disc}$ are real (it is Hermitian).  For an
+eigenvalue $\lambda$, the amplification factor of the \CN{} scheme is
+\begin{equation}
+  g \;=\; \frac{1 - \ii\dt\lambda/2}{1 + \ii\dt\lambda/2},
+\end{equation}
+which satisfies $|g| = 1$ for \emph{any} $\dt > 0$.  The scheme is
+therefore \textbf{unconditionally stable}: no time-step restriction is
+required for stability.
+
+\paragraph{Norm (probability) conservation.}
+The matrices $A$ and $B$ satisfy $B = A^\dagger$ (complex conjugate
+transpose).  The discrete propagator $A^{-1}B$ is therefore
+\emph{unitary}:
+\begin{equation}
+  (A^{-1}B)^\dagger (A^{-1}B)
+  \;=\; B^\dagger (A^\dagger)^{-1} A^{-1} B
+  \;=\; A A^{-1} (A^\dagger)^{-1} B
+  \;=\; I.
+\end{equation}
+Consequently, $\|\boldsymbol{\psi}^{n+1}\|^2 = \|\boldsymbol{\psi}^n\|^2$
+at every step — the discrete norm is exactly conserved (up to
+floating-point rounding errors of order $10^{-14}$).
+
+\paragraph{Second-order accuracy.}
+The local truncation error of \eqref{eq:cn_raw} is $\mathcal{O}(\dt^2)$
+in time and $\mathcal{O}(\dx^2)$ in space, so the scheme is globally
+second-order in both variables.
+
+\subsection{Matrix structure}
+
+The matrices $A$ and $B$ are \emph{complex tridiagonal}.  Defining the
+parameter
+\begin{equation}
+  r \;=\; \frac{\dt}{4\dx^2},
+\end{equation}
+their non-zero elements are (for $1 \leq i \leq N-2$):
+\begin{alignat}{2}
+  A_{i,i}   &= 1 + \ii\frac{\dt}{2}\!\left(\frac{1}{\dx^2} + V_i\right),
+  &\quad A_{i,i\pm 1} &= -\ii r, \label{eq:A_elements}\\[4pt]
+  B_{i,i}   &= 1 - \ii\frac{\dt}{2}\!\left(\frac{1}{\dx^2} + V_i\right),
+  &\quad B_{i,i\pm 1} &= +\ii r. \label{eq:B_elements}
+\end{alignat}
+The first and last rows enforce Dirichlet boundary conditions
+$\psi_0 = \psi_{N-1} = 0$: both rows are set to the identity row
+$(1,\,0,\,\ldots)$ in $A$ and $B$.
+
+Because $V(x)$ is static, $A$ and $B$ are \textbf{built once} before
+the time loop and reused at every step.
+
+\subsection{The Thomas algorithm}
+\label{sec:thomas}
+
+At each time step, the right-hand side is evaluated as a matrix-vector
+product $\mathbf{b}^n = B\,\boldsymbol{\psi}^n$ (one pass over the grid,
+$\mathcal{O}(N)$ operations), and the resulting tridiagonal system
+$A\,\boldsymbol{\psi}^{n+1} = \mathbf{b}^n$ is solved with the
+\textbf{Thomas algorithm} \cite{Thomas1949}.
+
+The Thomas algorithm is Gaussian elimination specialised for tridiagonal
+systems.  For a system with lower diagonal $l_i$, main diagonal $d_i$,
+upper diagonal $u_i$, and right-hand side $b_i$:
+
+\paragraph{Forward sweep} (elimination of $l_i$, from $i=1$ to $N-1$):
+\begin{align}
+  w_i &= l_i / d_{i-1}, \\
+  d_i &\leftarrow d_i - w_i\,u_{i-1}, \\
+  b_i &\leftarrow b_i - w_i\,b_{i-1}.
+\end{align}
+
+\paragraph{Back substitution} (from $i=N-1$ down to $0$):
+\begin{align}
+  x_{N-1} &= b_{N-1}/d_{N-1}, \\
+  x_i     &= (b_i - u_i\,x_{i+1}) / d_i.
+\end{align}
+
+The total cost is $\mathcal{O}(N)$ in both time and memory — optimal for
+a tridiagonal system.  The algorithm is numerically stable for
+diagonally dominant matrices, which the \CN{} matrix $A$ always satisfies
+(the main diagonal dominates because $|A_{ii}| > 2|A_{i,i\pm 1}|$
+whenever $\dt/\dx^2 < 2$, easily satisfied in practice).
+
+This is the same algorithm implemented by LAPACK's routine
+\texttt{zgtsv}, here realised explicitly in complex arithmetic without
+any external library dependency.
+
+\subsection{Boundary conditions}
+
+\textbf{Dirichlet} boundary conditions $\psi(x_\text{min},t) =
+\psi(x_\text{max},t) = 0$ are imposed.  Physically, the walls act as
+infinite potential barriers.  They introduce artificial reflections if
+the wave packet reaches the boundary, so the domain length $L$ must be
+chosen large enough that the packet remains far from the walls throughout
+the simulation.
+
+A practical criterion is $x_\text{min} \ll x_0 - k_0 T_\text{tot}$ and
+$x_\text{max} \gg x_0 + k_0 T_\text{tot}$, where $k_0 T_\text{tot}$ is
+the approximate distance travelled by the centre of the packet.
+
+\subsection{Algorithm summary}
+
+The complete time-stepping algorithm is:
+
+\begin{enumerate}
+  \item Read parameters and build grid $\{x_i\}$ and potential $\{V_i\}$.
+  \item Initialise $\boldsymbol{\psi}^0$ as the normalised Gaussian
+        \eqref{eq:gauss}.
+  \item Build the tridiagonal matrices $A$ and $B$ (once).
+  \item \textbf{For} $n = 0, 1, \ldots, M-1$:
+  \begin{enumerate}
+    \item[(a)] Compute $\mathbf{b}^n = B\,\boldsymbol{\psi}^n$
+               (matrix-vector product, $\mathcal{O}(N)$).
+    \item[(b)] Solve $A\,\boldsymbol{\psi}^{n+1} = \mathbf{b}^n$
+               with Thomas algorithm ($\mathcal{O}(N)$).
+    \item[(c)] Enforce $\psi_0^{n+1} = \psi_{N-1}^{n+1} = 0$.
+    \item[(d)] Write snapshot and norm to file (if snapshot step).
+  \end{enumerate}
+\end{enumerate}
+Total cost per time step: $\mathcal{O}(N)$.  Total cost: $\mathcal{O}(MN)$.
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Analysis of the simulation output}
+% ═══════════════════════════════════════════════════════════════════════════
+
+This section describes the expected physical behaviour and the
+corresponding signatures in each of the three plots produced by the
+Python analysis scripts.
+
+The default simulation parameters are:
+\begin{center}
+\begin{tabular}{lll}
+\hline
+Parameter & Value & Role \\
+\hline
+$L$ & 20\,bohr & domain length \\
+$\dx$ & 0.01\,bohr & spatial step \\
+$\dt$ & 0.001\,a.u. & time step \\
+$T_\text{tot}$ & 2.0\,a.u. & total time \\
+$x_0$ & $-5.0$\,bohr & initial packet centre \\
+$\sigma$ & 0.5\,bohr & packet width \\
+$k_0$ & 5.0\,bohr$^{-1}$ & central wave vector \\
+$x_\text{bar}$ & 0.0\,bohr & barrier left edge \\
+$w$ & 0.5\,bohr & barrier width \\
+$V_0$ & 20.0\,$E_h$ & barrier height \\
+\hline
+\end{tabular}
+\end{center}
+
+The mean kinetic energy of the packet is $E = k_0^2/2 = 12.5\,E_h$, while
+the barrier height is $V_0 = 20.0\,E_h$, so $E < V_0$: the simulation is
+in the \textbf{tunnelling regime}.  The evanescent decay constant inside
+the barrier is $\kappa = \sqrt{2(V_0-E)} \approx 3.87$\,bohr$^{-1}$,
+giving an approximate transmission probability from
+\eqref{eq:T_tunnelling}:
+\begin{equation}
+  T_\text{analytic} \;\approx\;
+  \left[1 + \frac{20^2\sinh^2(3.87\times 0.5)}{4\times 12.5\times 7.5}
+  \right]^{-1}
+  \;\approx\; 0.04.
+  \label{eq:T_predicted}
+\end{equation}
+About 4\% of the probability is expected to tunnel through the barrier,
+with the remaining 96\% reflected.
+
+\subsection{Snapshot plot (\texttt{snapshots.png})}
+
+\paragraph{What is shown.}
+Five panels display $|\psi(x,t)|^2$ at equally-spaced times
+$t = 0,\, T/4,\, T/2,\, 3T/4,\, T$.
+The potential barrier is shown as a shaded region scaled to the
+maximum probability density for visual reference.
+
+\paragraph{Expected behaviour.}
+\begin{itemize}
+  \item \textbf{$t = 0$}: A single Gaussian peak centred at $x_0 = -5$\,bohr,
+        well to the left of the barrier.  Its width is $\sigma = 0.5$\,bohr.
+
+  \item \textbf{Propagation phase ($t \approx T/4$)}: The packet moves
+        rightward at group velocity $v_g = k_0 = 5$\,bohr/a.u.  It
+        gradually broadens due to dispersion: because different $k$
+        components travel at slightly different speeds $v(k) = k$, the
+        packet spreads as $\sigma(t) \approx \sqrt{\sigma^2 + t^2/(4\sigma^2)}$.
+
+  \item \textbf{Scattering ($t \approx T/2$)}: The packet reaches the
+        barrier.  The probability density is temporarily compressed and
+        distorted — the leading edge decelerates while the tail catches up.
+        A small transmitted fraction leaks through the right side of the
+        barrier.
+
+  \item \textbf{Post-scattering ($t \approx 3T/4$ and $T$)}: Two distinct
+        peaks are visible.  A large reflected packet travels leftward; a
+        small transmitted packet continues rightward.  The relative areas
+        under the two peaks reflect the ratio $R:T \approx 96:4$.
+\end{itemize}
+
+\paragraph{What to look for.}
+The total area under the curve (norm) must remain constant across all
+panels.  Any visible growth or decay signals a numerical problem.
+
+\subsection{Quantitative analysis plot (\texttt{analysis.png})}
+
+\subsubsection{Panel A: Norm conservation}
+
+\paragraph{What is shown.}
+The discrete norm $\|\boldsymbol{\psi}^n\|^2_\dx = \dx\sum_i |\psi_i^n|^2$
+as a function of time, compared against the exact value of~1.
+
+\paragraph{Expected behaviour.}
+Because the \CN{} propagator is unitary (Section~\ref{sec:cn_properties}),
+the norm deviation should be $|\|\psi^n\|^2 - 1| \lesssim 10^{-12}$
+throughout — essentially machine precision.  This is fundamentally
+different from explicit schemes, which dissipate or amplify the norm.
+
+\paragraph{What to look for.}
+A flat line at 1 confirms the unitarity of the numerical propagator.
+Any monotonic drift would indicate an implementation bug; oscillatory
+drift would suggest stability issues.
+
+\subsubsection{Panel B: Transmission and reflection coefficients}
+
+\paragraph{What is shown.}
+The time evolution of
+\begin{equation}
+  R(t) = \dx\sum_{i:\,x_i < x_\text{bar}} |\psi_i|^2,
+  \qquad
+  T(t) = \dx\sum_{i:\,x_i \geq x_\text{bar}} |\psi_i|^2,
+\end{equation}
+together with their sum $R(t) + T(t)$.
+
+\paragraph{Expected behaviour.}
+Initially $R \approx 1$ and $T \approx 0$ (entire packet to the left of
+the barrier).  As the packet reaches and interacts with the barrier, $R$
+decreases and $T$ increases.  After the scattering is complete, both
+coefficients reach their asymptotic values: $T_\infty \approx 0.04$ and
+$R_\infty \approx 0.96$ from \eqref{eq:T_predicted}.
+
+The sum $R(t) + T(t)$ should remain equal to 1 at all times (it is just
+another way of writing the norm conservation), providing a self-consistency
+check.  During the scattering phase, $R+T$ may appear to dip very slightly
+if the wave function is spread \emph{across} the barrier boundary, but
+this is a boundary effect of the integration region, not a physical violation.
+
+\paragraph{What to look for.}
+The asymptotic value of $T_\infty$ can be directly compared to the
+analytic plane-wave result \eqref{eq:T_predicted}.  Discrepancies arise
+because the Gaussian packet has a finite momentum spread; the wave-packet
+result converges to the plane-wave formula in the limit $\sigma \to \infty$
+(narrow $k$-distribution).
+
+\subsubsection{Panel C: Mean position $\langle x \rangle(t)$}
+
+\paragraph{What is shown.}
+The expectation value of position,
+\begin{equation}
+  \langle x\rangle(t) \;=\; \dx\sum_i x_i\,|\psi_i(t)|^2,
+\end{equation}
+as a function of time.
+
+\paragraph{Expected behaviour.}
+\begin{itemize}
+  \item \textbf{Before the barrier}: $\langle x\rangle$ increases linearly
+        with slope $v_g = k_0 = 5$\,bohr/a.u., reflecting the classical
+        motion of the packet centre.
+
+  \item \textbf{During scattering}: the slope decreases as the packet
+        interacts with the barrier.  Classically, the particle would be
+        reflected instantaneously; quantum mechanically, the interaction is
+        spread over a finite time (related to the \emph{Wigner delay time}).
+
+  \item \textbf{After scattering}: $\langle x\rangle$ is the
+        probability-weighted average of the reflected and transmitted
+        centres.  Since $R \gg T$, the mean position moves leftward (the
+        reflected packet dominates).  The slope of the asymptotic linear
+        regime will be negative, approximately $-k_0 R_\infty$.
+\end{itemize}
+
+\paragraph{What to look for.}
+The transition from positive to negative slope signals the moment of
+scattering.  The asymptotic slope encodes the relative weight of reflected
+vs.\ transmitted components.
+
+\subsubsection{Panel D: Packet width $\sigma(t)$}
+
+\paragraph{What is shown.}
+The root-mean-square width of the packet,
+\begin{equation}
+  \sigma(t) \;=\; \sqrt{\langle x^2\rangle - \langle x\rangle^2},
+  \quad
+  \langle x^2\rangle = \dx\sum_i x_i^2\,|\psi_i|^2.
+\end{equation}
+
+\paragraph{Expected behaviour.}
+\begin{itemize}
+  \item \textbf{Free propagation}: A Gaussian wave packet in free space
+        spreads as
+        \begin{equation}
+          \sigma(t) \;=\; \sigma_0\,\sqrt{1 + \left(\frac{t}{2\sigma_0^2}\right)^2},
+          \label{eq:spreading}
+        \end{equation}
+        which for $t \gg 2\sigma_0^2 = 0.5$\,a.u.\ becomes linear:
+        $\sigma(t) \approx t/(2\sigma_0)$.
+
+  \item \textbf{After scattering}: The width grows faster than the free-space
+        result.  The physical reason is that the wave function splits into
+        two spatially separated components (reflected and transmitted), and
+        the variance $\langle x^2\rangle - \langle x\rangle^2$ receives a
+        large contribution from the \emph{distance between the two peaks},
+        not just from the width of each individual peak.  This is a
+        purely quantum interference effect.
+\end{itemize}
+
+\paragraph{What to look for.}
+A clear change of slope at the time of scattering: the growth rate of
+$\sigma(t)$ increases sharply when the packet splits.
+
+\subsection{Animation (\texttt{evolution.mp4})}
+
+The animation simultaneously shows $|\psi(x,t)|^2$ (solid blue) and
+$\mathrm{Re}[\psi(x,t)]$ (dashed orange), which reveals the oscillatory
+phase structure of the wave function.
+
+\paragraph{Expected behaviour.}
+\begin{itemize}
+  \item The real part oscillates at spatial frequency $k_0$, visible as
+        rapid oscillations inside the packet envelope.
+  \item As the packet approaches the barrier, the oscillations in the
+        barrier region are exponentially suppressed (evanescent wave).
+  \item After the interaction, the reflected packet shows oscillations
+        travelling in the $-x$ direction (decreasing phase with time),
+        while the tiny transmitted packet oscillates in the $+x$ direction.
+  \item Interference between the incoming and reflected components is
+        visible as a standing-wave pattern to the left of the barrier
+        during the scattering phase.
+\end{itemize}
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Numerical parameters: stability and accuracy}
+% ═══════════════════════════════════════════════════════════════════════════
+
+\subsection{Grid resolution requirements}
+
+For the simulation to faithfully represent the wave packet, the grid
+must resolve the shortest physical length scales:
+
+\begin{itemize}
+  \item \textbf{Spatial}: the de Broglie wavelength $\lambda = 2\pi/k_0$
+        must be resolved with several grid points.  For $k_0 = 5$,
+        $\lambda \approx 1.26$\,bohr, and $\dx = 0.01$\,bohr gives
+        $\approx 126$ points per wavelength — more than sufficient.
+
+  \item \textbf{Inside the barrier}: the evanescent decay length is
+        $1/\kappa \approx 0.26$\,bohr for the default parameters.
+        With $\dx = 0.01$, there are $\approx 26$ points per decay length,
+        which is adequate.
+
+  \item \textbf{Temporal}: the \CN{} scheme is unconditionally stable, so
+        $\dt$ is constrained only by \emph{accuracy}.  A practical
+        criterion is $\dt \ll 1/E_\text{max}$, where
+        $E_\text{max} \approx k_\text{max}^2/2$ is the maximum energy in
+        the spectrum.  For $k_\text{max} \approx k_0 + 3/(2\sigma)
+        \approx 8$, $E_\text{max} \approx 32$\,a.u., giving
+        $\dt \ll 0.03$\,a.u.  The default $\dt = 0.001$\,a.u.\ satisfies
+        this easily.
+\end{itemize}
+
+\subsection{Courant number}
+
+Although the \CN{} scheme is unconditionally stable, the effective
+Courant number $\nu = k_0\dt/\dx = 5 \times 0.001 / 0.01 = 0.5$
+gives an indication of the accuracy of the phase velocity.  Values
+$\nu \lesssim 1$ ensure that the numerical group velocity closely
+matches the analytical one.
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Conclusions}
+% ═══════════════════════════════════════════════════════════════════════════
+
+The \CN{} scheme provides a robust, second-order, norm-conserving method
+for propagating the TDSE.  Its implicit nature eliminates the time-step
+restriction that affects explicit schemes, and the tridiagonal structure
+of the resulting linear system makes each step $\mathcal{O}(N)$ via the
+Thomas algorithm.
+
+The simulation reproduces the key quantum features of barrier scattering:
+wave-packet spreading, tunnelling through a classically forbidden region,
+and the splitting of the packet into reflected and transmitted components.
+The quantitative comparison of the numerically computed transmission
+coefficient with the analytic plane-wave formula provides a direct
+validation of both the physical model and the numerical implementation.
+
+\clearpage
+
+% ═══════════════════════════════════════════════════════════════════════════
+\begin{thebibliography}{99}
+
+\bibitem{Griffiths2018}
+D.~J.~Griffiths and D.~F.~Schroeter,
+\textit{Introduction to Quantum Mechanics}, 3rd ed.\
+Cambridge University Press, 2018.
+
+\bibitem{CrankNicolson1947}
+J.~Crank and P.~Nicolson,
+``A practical method for numerical evaluation of solutions of partial
+differential equations of the heat-conduction type,''
+\textit{Proc.\ Camb.\ Phil.\ Soc.}, vol.~43, pp.~50--67, 1947.
+
+\bibitem{Thomas1949}
+L.~H.~Thomas,
+``Elliptic problems in linear difference equations over a network,''
+Watson Sci.\ Comput.\ Lab.\ Report, Columbia University, 1949.
+
+\bibitem{Tannor2007}
+D.~J.~Tannor,
+\textit{Introduction to Quantum Mechanics: A Time-Dependent Perspective},
+University Science Books, 2007.
+
+\bibitem{NumericalRecipes}
+W.~H.~Press, S.~A.~Teukolsky, W.~T.~Vetterling, and B.~P.~Flannery,
+\textit{Numerical Recipes: The Art of Scientific Computing}, 3rd ed.\
+Cambridge University Press, 2007.
+
+\bibitem{Sakurai2017}
+J.~J.~Sakurai and J.~Napolitano,
+\textit{Modern Quantum Mechanics}, 3rd ed.\
+Cambridge University Press, 2021.
+
+\bibitem{Cohen1977}
+C.~Cohen-Tannoudji, B.~Diu, and F.~Lalo\"{e},
+\textit{Quantum Mechanics}, vols.~I \& II,
+Wiley, 1977.
+
+\bibitem{Hairer1993}
+E.~Hairer, S.~P.~N\o rsett, and G.~Wanner,
+\textit{Solving Ordinary Differential Equations I: Nonstiff Problems},
+2nd ed., Springer, 1993.
+
+\bibitem{Leforestier1991}
+C.~Leforestier et al.,
+``A comparison of different propagation schemes for the time-dependent
+Schr\"{o}dinger equation,''
+\textit{J.\ Comput.\ Phys.}, vol.~94, pp.~59--80, 1991.
+
+\bibitem{Wigner1955}
+E.~P.~Wigner,
+``Lower limit for the energy derivative of the scattering phase shift,''
+\textit{Phys.\ Rev.}, vol.~98, pp.~145--147, 1955.
+
+\end{thebibliography}
+
+\clearpage
+
+% ═══════════════════════════════════════════════════════════════════════════
+\appendix
+% ═══════════════════════════════════════════════════════════════════════════
+
+% ───────────────────────────────────────────────────────────────────────────
+\section{The quantum state space and Dirac formalism}
+\label{app:hilbert}
+% ───────────────────────────────────────────────────────────────────────────
+
+\subsection{Hilbert space structure}
+
+The rigorous mathematical setting for quantum mechanics is a
+\emph{complex separable Hilbert space} $\mathcal{H}$.  For a
+one-dimensional spinless particle, the natural choice is
+$\mathcal{H} = L^2(\mathbb{R})$: the space of square-integrable
+complex functions on $\mathbb{R}$, equipped with the inner product
+\begin{equation}
+  \langle f, g\rangle \;=\; \int_{-\infty}^{+\infty} f^*(x)\,g(x)\,dx.
+\end{equation}
+A physical state corresponds to a \emph{unit vector} (ray) in
+$\mathcal{H}$, i.e.\ $\|\psi\| = 1$.
+
+In Dirac notation, states are \emph{kets} $\ket{\psi} \in \mathcal{H}$
+and their duals are \emph{bras} $\bra{\psi} \in \mathcal{H}^*$.
+The inner product is $\braket{\phi}{\psi}$, and the norm is
+$\|\psi\|^2 = \braket{\psi}{\psi}$.
+
+\subsection{Observables as self-adjoint operators}
+
+Every physical observable $A$ corresponds to a \emph{self-adjoint}
+(Hermitian) operator $\hat{A}: \mathcal{H} \to \mathcal{H}$, defined
+by $\hat{A}^\dagger = \hat{A}$.  Self-adjointness guarantees:
+\begin{itemize}
+  \item All eigenvalues are real (measurable quantities must be real).
+  \item Eigenvectors corresponding to distinct eigenvalues are orthogonal.
+  \item The eigenvectors form a complete orthonormal basis of $\mathcal{H}$
+        (spectral theorem).
+\end{itemize}
+
+For continuous spectra (position, momentum), the eigenstates are
+distributions rather than true $L^2$ functions.  The position
+eigenstates $\ket{x'}$ satisfy
+\begin{equation}
+  \hat{x}\ket{x'} = x'\ket{x'}, \qquad
+  \braket{x}{x'} = \delta(x-x'), \qquad
+  \int_{-\infty}^{+\infty} \ket{x'}\bra{x'}\,dx' = \hat{I},
+\end{equation}
+and the wave function is the projection
+$\psi(x,t) = \braket{x}{\psi(t)}$.
+
+\subsection{The canonical commutation relation}
+
+The position and momentum operators satisfy
+\begin{equation}
+  [\hat{x},\, \hat{p}] \;=\; \ii\hbar\,\hat{I}.
+  \label{eq:ccr}
+\end{equation}
+In the position representation, $\hat{p} = -\ii\hbar\,\partial_x$.
+The commutation relation \eqref{eq:ccr} is the algebraic root of the
+Heisenberg uncertainty principle: for any state $\ket{\psi}$,
+\begin{equation}
+  \Delta x\,\Delta p \;\geq\; \frac{\hbar}{2},
+\end{equation}
+where $(\Delta A)^2 = \langle \hat{A}^2\rangle - \langle\hat{A}\rangle^2$.
+The Gaussian wave packet \eqref{eq:gauss} saturates this bound, making
+it the \emph{coherent state} of the Weyl--Heisenberg algebra.
+
+\subsection{Time evolution operator and unitarity}
+
+The formal solution of the TDSE is
+\begin{equation}
+  \ket{\psi(t)} \;=\; \hat{U}(t,t_0)\,\ket{\psi(t_0)},
+  \qquad
+  \hat{U}(t,t_0) = \exp\!\left[-\frac{\ii}{\hbar}\hat{H}(t-t_0)\right],
+\end{equation}
+where the last expression holds for time-independent $\hat{H}$.
+The operator $\hat{U}$ is \emph{unitary}: $\hat{U}^\dagger \hat{U} = \hat{I}$,
+which is the operator statement of probability conservation.
+The \CN{} propagator $A^{-1}B$ is a finite-dimensional unitary
+approximation to $\hat{U}(\dt)$.
+
+% ───────────────────────────────────────────────────────────────────────────
+\section{Transfer matrix method and exact tunnelling formulae}
+\label{app:transfer}
+% ───────────────────────────────────────────────────────────────────────────
+
+\subsection{Piecewise solution of the stationary Schr\"{o}dinger equation}
+
+For a static potential the TDSE separates via $\psi(x,t) =
+\phi(x)\,\ee^{-\ii Et/\hbar}$, yielding the
+\emph{time-independent Schr\"{o}dinger equation} (TISE):
+\begin{equation}
+  -\frac{1}{2}\phi''(x) + V(x)\phi(x) \;=\; E\,\phi(x).
+\end{equation}
+
+For the rectangular barrier \eqref{eq:barrier}, the TISE has piecewise
+constant coefficients.  In each region the general solution is:
+\begin{align}
+  \text{Region I } (x < x_\text{bar}):&\quad
+    \phi(x) = A\,\ee^{\ii kx} + B\,\ee^{-\ii kx}, \quad k = \sqrt{2E}, \\
+  \text{Region II } (x_\text{bar} < x < x_\text{bar}+w):&\quad
+    \phi(x) = C\,\ee^{\kappa x} + D\,\ee^{-\kappa x}, \quad
+    \kappa = \sqrt{2(V_0-E)},\quad (E<V_0), \\
+  \text{Region III } (x > x_\text{bar}+w):&\quad
+    \phi(x) = F\,\ee^{\ii kx},
+\end{align}
+where $F\ee^{\ii kx}$ is the transmitted wave (no left-moving component
+in region III for a right-incident wave).
+
+\subsection{The transfer matrix}
+
+At each interface, continuity of $\phi$ and $\phi'$ provides two
+matching conditions.  These can be compactly encoded in a
+$2\times 2$ \emph{transfer matrix} $M$ such that
+\begin{equation}
+  \begin{pmatrix} A \\ B \end{pmatrix}
+  \;=\; M \begin{pmatrix} F \\ 0 \end{pmatrix}.
+\end{equation}
+For the rectangular barrier, $M = M_{\text{I}\to\text{II}}\cdot
+M_{\text{II}\to\text{III}}$, where each interface matrix is
+\begin{equation}
+  M_{j\to k} \;=\; \frac{1}{2q_k}
+  \begin{pmatrix}
+    q_k + q_j & q_k - q_j \\
+    q_k - q_j & q_k + q_j
+  \end{pmatrix},
+\end{equation}
+with $q_j$ being the (possibly imaginary) wave vector in region $j$.
+The transmission amplitude is $t = 1/M_{11}$ and
+\begin{equation}
+  T = |t|^2 = \frac{1}{|M_{11}|^2},
+\end{equation}
+which, after explicit computation, reproduces \eqref{eq:T_tunnelling}.
+The transfer matrix formalism generalises straightforwardly to
+arbitrary piecewise-constant potentials.
+
+\subsection{WKB approximation}
+
+For a \emph{smooth} potential barrier, the exact transfer matrix is
+not available in closed form.  The Wentzel--Kramers--Brillouin (WKB)
+approximation replaces the exact evanescent solution inside the barrier
+with a locally-plane-wave ansatz:
+\begin{equation}
+  \phi(x) \;\approx\;
+  \frac{C}{\sqrt{\kappa(x)}}\,\exp\!\left[-\int_{x_1}^{x}\kappa(x')\,dx'\right],
+  \quad \kappa(x) = \sqrt{2(V(x)-E)},
+\end{equation}
+where $x_1$, $x_2$ are the classical turning points ($V(x_{1,2}) = E$).
+The WKB transmission coefficient is
+\begin{equation}
+  T_\text{WKB} \;\approx\; \exp\!\left[-2\int_{x_1}^{x_2}\kappa(x)\,dx\right].
+  \label{eq:wkb}
+\end{equation}
+For the rectangular barrier, $\kappa(x) = \kappa = \text{const}$ and
+\eqref{eq:wkb} gives $T \approx \ee^{-2\kappa w}$, consistent with the
+large-$\kappa w$ limit of \eqref{eq:T_tunnelling}.
+
+% ───────────────────────────────────────────────────────────────────────────
+\section{Dispersion relation and free-packet dynamics}
+\label{app:dispersion}
+% ───────────────────────────────────────────────────────────────────────────
+
+\subsection{Dispersion relation}
+
+For a free particle ($V=0$), substituting a plane wave
+$\psi = \ee^{\ii(kx - \omega t)}$ into the TDSE gives the
+\emph{dispersion relation}
+\begin{equation}
+  \omega(k) \;=\; \frac{k^2}{2} \quad \text{(atomic units)}.
+\end{equation}
+This is a \emph{quadratic} dispersion, unlike the linear dispersion of
+photons.  Two velocities characterise wave-packet propagation:
+\begin{align}
+  v_\text{phase} &= \frac{\omega}{k} = \frac{k}{2}, \\
+  v_\text{group} &= \frac{d\omega}{dk} = k.
+\end{align}
+The group velocity $v_g = k_0$ is the velocity of the packet's centre
+of mass and equals the classical velocity $p/m = k_0$ in atomic units.
+
+\subsection{Exact free-propagation of the Gaussian packet}
+
+A Gaussian wave packet in free space can be propagated exactly using
+the Fourier convolution theorem.  Starting from \eqref{eq:gauss}, its
+Fourier transform is
+\begin{equation}
+  \tilde{\phi}(k,0) \;=\;
+  (2\pi\sigma^2)^{1/4}\,\sigma\,\ee^{-(k-k_0)^2\sigma^2}\,\ee^{-\ii k x_0}.
+\end{equation}
+At time $t$, each mode acquires a phase $\ee^{-\ii\omega(k)t}$:
+\begin{equation}
+  \tilde{\phi}(k,t) \;=\; \tilde{\phi}(k,0)\,\ee^{-\ii k^2 t/2}.
+\end{equation}
+Transforming back gives
+\begin{equation}
+  \psi(x,t) \;=\;
+  \left(\frac{1}{2\pi\sigma_t^2}\right)^{1/4}
+  \exp\!\left[-\frac{(x - x_0 - k_0 t)^2}{4\sigma_t^2}\right]
+  \exp\!\left[\ii k_0\!\left(x - \frac{k_0 t}{2}\right)\right]
+  \exp\!\left[\ii\phi_t\right],
+  \label{eq:free_packet}
+\end{equation}
+where the \emph{complex width} is
+\begin{equation}
+  \sigma_t \;=\; \sigma\sqrt{1 + \ii t/(2\sigma^2)},
+\end{equation}
+and $\phi_t = -\frac{1}{2}\arg(\sigma_t/\sigma)$ is a global phase.
+The probability density is still Gaussian:
+\begin{equation}
+  |\psi(x,t)|^2 \;=\;
+  \frac{1}{\sqrt{2\pi}|\sigma_t|}
+  \exp\!\left[-\frac{(x-x_0-k_0 t)^2}{2|\sigma_t|^2}\right],
+\end{equation}
+with real width $|\sigma_t| = \sigma\sqrt{1 + t^2/(4\sigma^4)}$,
+which is exactly equation \eqref{eq:spreading}.
+
+The spreading rate $d|\sigma_t|/dt \to 1/(2\sigma)$ for large $t$
+is inversely proportional to the initial width: a narrow packet
+(small $\sigma$, large momentum spread) spreads faster.
+
+% ───────────────────────────────────────────────────────────────────────────
+\section{Operator splitting and the Cayley form}
+\label{app:splitting}
+% ───────────────────────────────────────────────────────────────────────────
+
+\subsection{The exact propagator as a matrix exponential}
+
+The formal solution of the TDSE over one time step is
+\begin{equation}
+  \boldsymbol{\psi}^{n+1} \;=\;
+  \ee^{-\ii\dt H_\text{disc}}\,\boldsymbol{\psi}^n.
+\end{equation}
+Direct computation of the matrix exponential costs $\mathcal{O}(N^3)$
+— prohibitive for large $N$.  Several efficient approximations exist.
+
+\subsection{Padé approximants and the Cayley form}
+
+The \CN{} scheme is equivalent to the \emph{first-order Padé
+approximant} of the matrix exponential:
+\begin{equation}
+  \ee^{-\ii\dt H} \;\approx\;
+  \frac{I - \ii\dt H/2}{I + \ii\dt H/2}
+  \;=\; A^{-1}B.
+  \label{eq:cayley}
+\end{equation}
+This is also known as the \emph{Cayley form} of the propagator.  It is
+\emph{exactly unitary} regardless of $\dt$, because the numerator and
+denominator are complex conjugates of each other (for Hermitian $H$).
+
+Higher-order Padé approximants $[m/m]$ exist and achieve
+$\mathcal{O}(\dt^{2m})$ accuracy while remaining unitary, but they
+require solving $m$ tridiagonal systems per step and are rarely used
+in practice.
+
+\subsection{Strang splitting}
+
+For Hamiltonians of the form $H = T + V$ where $T$ is the kinetic
+operator and $V$ is diagonal in position space, the
+\emph{split-operator} (Strang splitting) method approximates:
+\begin{equation}
+  \ee^{-\ii\dt(T+V)} \;\approx\;
+  \ee^{-\ii\dt V/2}\,\ee^{-\ii\dt T}\,\ee^{-\ii\dt V/2}
+  + \mathcal{O}(\dt^3).
+\end{equation}
+Each factor can be applied efficiently: $\ee^{-\ii\dt V/2}$ is a
+pointwise multiplication in position space (diagonal), while
+$\ee^{-\ii\dt T}$ is a multiplication in momentum (Fourier) space.
+Using the Fast Fourier Transform (FFT), each step costs
+$\mathcal{O}(N\log N)$, compared to $\mathcal{O}(N)$ for the \CN{}
+Thomas algorithm.  However, the split-operator method is second-order
+accurate and exactly unitary only in the limit of exact arithmetic, and
+requires global FFTs which are harder to parallelise.
+
+% ───────────────────────────────────────────────────────────────────────────
+\section{Scattering theory: S-matrix and Wigner delay time}
+\label{app:scattering}
+% ───────────────────────────────────────────────────────────────────────────
+
+\subsection{The scattering matrix}
+
+For a potential that vanishes at $x \to \pm\infty$, scattering theory
+describes the asymptotic relation between incoming and outgoing plane
+waves.  In 1D, the \emph{S-matrix} is a $2\times 2$ unitary matrix:
+\begin{equation}
+  S \;=\;
+  \begin{pmatrix}
+    t   & r' \\
+    r   & t'
+  \end{pmatrix},
+\end{equation}
+where $t, t'$ are transmission amplitudes (right-incident and
+left-incident) and $r, r'$ are reflection amplitudes.  Unitarity
+$S^\dagger S = I$ implies $|t|^2 + |r|^2 = 1$, i.e.\ $T + R = 1$.
+
+For a symmetric potential (even $V(x)$), $t = t'$ and $|r| = |r'|$.
+The rectangular barrier is symmetric about its centre, so both
+transmission amplitudes are equal.
+
+\subsection{Phase shifts and time delays}
+
+The transmission amplitude can be written as
+$t = \sqrt{T}\,\ee^{\ii\varphi_t(k)}$, where $\varphi_t$ is the
+transmission phase.  The \emph{Wigner--Smith delay time} is defined as
+\begin{equation}
+  \tau(k) \;=\; \frac{d\varphi_t}{d\omega}
+  \;=\; \frac{1}{v_g}\frac{d\varphi_t}{dk},
+  \label{eq:wigner}
+\end{equation}
+and represents the extra time spent by the transmitted wave packet
+near the barrier compared to free propagation \cite{Wigner1955}.
+For the rectangular barrier in the tunnelling regime,
+$\tau > 0$ (the packet is delayed), and as $V_0 \to \infty$ the
+delay saturates to $\tau_\text{max} = w/v_g$ — the so-called
+\emph{Hartman effect}, where the delay becomes independent of
+barrier width for opaque barriers.
+
+In the simulation, the delay manifests as a reduction in the slope
+of $\langle x\rangle(t)$ during the scattering event (Panel C of
+\texttt{analysis.png}).
+
+\subsection{The optical theorem in 1D}
+
+The optical theorem in 1D relates the forward scattering amplitude to
+the total cross-section.  In one dimension, ``cross-section'' is
+replaced by the \emph{total reflectance}, and the theorem states:
+\begin{equation}
+  \mathrm{Im}(r) + \frac{k}{2}(T-1) = 0,
+\end{equation}
+which is a direct consequence of $S$-matrix unitarity and
+provides an additional consistency check for numerical scattering
+calculations.
+
+% ───────────────────────────────────────────────────────────────────────────
+\section{Von Neumann stability analysis}
+\label{app:stability}
+% ───────────────────────────────────────────────────────────────────────────
+
+\subsection{Von Neumann analysis for the TDSE}
+
+The stability of finite-difference schemes for linear PDEs can be
+analysed rigorously via the von Neumann (Fourier) method.  Consider a
+uniform grid and a single Fourier mode $\psi_j^n = g^n\,\ee^{\ii j\xi\dx}$,
+where $\xi$ is the wave vector and $g$ is the amplification factor.
+Stability requires $|g| \leq 1$ for all $\xi$.
+
+\paragraph{Forward Euler (explicit):}
+Substituting into $\psi_j^{n+1} = \psi_j^n - \ii\dt H_\text{disc}\psi_j^n$
+gives
+\begin{equation}
+  g \;=\; 1 - \ii\dt\,\lambda(\xi),
+  \quad \lambda(\xi) = \frac{2(1-\cos(\xi\dx))}{\dx^2} + V \in \mathbb{R}.
+\end{equation}
+Then $|g|^2 = 1 + \dt^2\lambda^2 > 1$ for $\lambda \neq 0$: the scheme
+is \emph{always unstable} for the Schrödinger equation.
+
+\paragraph{Crank--Nicolson:}
+The amplification factor is
+\begin{equation}
+  g \;=\; \frac{1 - \ii\dt\lambda/2}{1 + \ii\dt\lambda/2}.
+\end{equation}
+Since $\lambda \in \mathbb{R}$, we have $|g|^2 = 1$ identically for
+all $\xi$ and all $\dt > 0$: the scheme is \emph{unconditionally
+stable} and, moreover, \emph{exactly norm-preserving} at the level of
+the amplification factor.
+
+\paragraph{Implicit mid-point rule (Crank--Nicolson is a special case):}
+More generally, the $\theta$-method
+\begin{equation}
+  \ii\frac{\psi^{n+1}-\psi^n}{\dt} \;=\;
+  (1-\theta)H\psi^n + \theta H\psi^{n+1}
+\end{equation}
+is stable for $\theta \geq 1/2$.  The Crank--Nicolson scheme
+corresponds to $\theta = 1/2$ and is the only choice in this family
+that is both stable and second-order accurate.
+
+\subsection{Numerical dispersion}
+
+Although the \CN{} scheme is unconditionally stable, it introduces
+a \emph{numerical dispersion error}: the discrete phase velocity
+$\tilde{\omega}(\xi)$ differs from the exact $\omega(\xi) = \xi^2/2$.
+From the amplification factor,
+\begin{equation}
+  \tilde{\omega}(\xi) \;=\;
+  \frac{2}{\dt}\arctan\!\left(\frac{\dt\,\lambda(\xi)}{2}\right),
+  \quad
+  \lambda(\xi) = \frac{2(1-\cos\xi\dx)}{\dx^2}.
+\end{equation}
+Expanding for small $\xi\dx$ and $\dt$:
+\begin{equation}
+  \tilde{\omega}(\xi) \;=\; \frac{\xi^2}{2}
+  \left[1 - \frac{(\xi\dx)^2}{12} - \frac{\dt^2\xi^4}{24} + \ldots\right],
+\end{equation}
+showing $\mathcal{O}(\dx^2, \dt^2)$ dispersion errors, consistent with
+the second-order accuracy of the scheme.  High-$k$ components of the
+wave packet travel at a slightly wrong speed — this is the physical
+origin of the \emph{numerical spreading} that adds to the physical
+quantum spreading.
+
+% ───────────────────────────────────────────────────────────────────────────
+\section{Ehrenfest's theorem and quantum-classical correspondence}
+\label{app:ehrenfest}
+% ───────────────────────────────────────────────────────────────────────────
+
+\subsection{Statement and derivation}
+
+\emph{Ehrenfest's theorem} establishes the connection between quantum
+expectation values and classical equations of motion.  For any
+observable $\hat{A}$, the Heisenberg equation of motion is:
+\begin{equation}
+  \frac{d}{dt}\langle\hat{A}\rangle \;=\;
+  \frac{1}{\ii\hbar}\langle[\hat{A},\hat{H}]\rangle
+  + \left\langle\pdv{\hat{A}}{t}\right\rangle.
+\end{equation}
+Applying this to $\hat{x}$ and $\hat{p}$ with $\hat{H} = \hat{p}^2/2m + V(\hat{x})$:
+\begin{align}
+  \frac{d\langle\hat{x}\rangle}{dt}
+  &= \frac{\langle\hat{p}\rangle}{m}, \label{eq:ehr1} \\
+  \frac{d\langle\hat{p}\rangle}{dt}
+  &= -\left\langle\frac{\partial V}{\partial x}\right\rangle. \label{eq:ehr2}
+\end{align}
+These are the quantum analogues of Hamilton's equations.  Note
+the crucial difference from the classical result: \eqref{eq:ehr2}
+involves $\langle V'(\hat{x})\rangle$, not $V'(\langle\hat{x}\rangle)$.
+The two coincide only if $V$ is at most quadratic, or if the wave
+packet is so narrow that $\psi(x,t) \approx \delta(x - x_\text{cl}(t))$.
+
+\subsection{Implications for the simulation}
+
+In the early propagation phase, the wave packet is narrow compared to
+the scale on which $V$ varies (the barrier), so Ehrenfest's theorem
+predicts nearly classical motion: $\langle x\rangle(t) \approx
+x_0 + k_0 t$.  This is exactly the linear regime visible in Panel C
+before the scattering event.
+
+When the packet interacts with the barrier, $\langle V'\rangle \neq
+V'(\langle x\rangle)$, the classical approximation breaks down, and
+quantum effects (tunnelling, interference) dominate.  After
+the scattering, the wave function consists of two well-separated
+packets, and $\langle x\rangle$ becomes a weighted average that has
+no classical counterpart.
+
+\subsection{Energy conservation}
+
+From Ehrenfest's theorem, the mean energy $\langle\hat{H}\rangle$ is
+conserved:
+\begin{equation}
+  \frac{d}{dt}\langle\hat{H}\rangle \;=\;
+  \frac{1}{\ii\hbar}\langle[\hat{H},\hat{H}]\rangle = 0.
+\end{equation}
+In the numerical simulation, energy conservation is not enforced
+explicitly by the \CN{} scheme (only norm is exactly conserved).
+Nevertheless, the second-order accuracy of the scheme ensures that
+the energy drift is $\mathcal{O}(\dt^2)$ per step.
+
+% ───────────────────────────────────────────────────────────────────────────
+\section{Absorbing boundary conditions and perfectly matched layers}
+\label{app:abc}
+% ───────────────────────────────────────────────────────────────────────────
+
+\subsection{The problem with Dirichlet boundaries}
+
+Dirichlet boundary conditions $\psi(x_\text{min}) = \psi(x_\text{max}) = 0$
+mimic infinitely hard walls.  They are simple to implement but introduce
+\emph{spurious reflections} as soon as the wave packet reaches the boundary.
+The domain must therefore be large enough that no part of $\psi$ reaches
+the walls during the simulation — a requirement that can make the problem
+expensive for long times or fast packets.
+
+\subsection{Absorbing boundary conditions}
+
+A more efficient alternative is to modify the Hamiltonian near the
+boundaries by adding a negative imaginary potential (absorption):
+\begin{equation}
+  V(x) \;\to\; V(x) - \ii\,\Gamma(x),
+  \quad \Gamma(x) \geq 0,
+\end{equation}
+where $\Gamma(x)$ is large only near the domain edges.  This makes
+the Hamiltonian \emph{non-Hermitian} in the absorbing region, causing
+the norm to decay as probability is absorbed.  The reflected numerical
+wave is exponentially suppressed.
+
+A standard choice is the cosine ramp:
+\begin{equation}
+  \Gamma(x) \;=\;
+  \Gamma_0\,\sin^2\!\left(\frac{\pi}{2}
+  \cdot\frac{|x|-x_\text{abs}}{L_\text{abs}}\right)
+  \quad \text{for } |x| > x_\text{abs},
+\end{equation}
+where $L_\text{abs}$ and $\Gamma_0$ are the absorption layer width and
+strength.
+
+\subsection{Perfectly matched layers}
+
+The gold standard for absorbing boundaries is the \emph{perfectly
+matched layer} (PML), originally developed for Maxwell's equations
+\cite{NumericalRecipes} and later adapted to the TDSE.  A PML is
+constructed by analytically continuing the spatial coordinate into the
+complex plane:
+\begin{equation}
+  x \;\to\; \tilde{x}(x) \;=\; x + \ii\int_0^x \sigma(x')\,dx',
+\end{equation}
+where $\sigma(x') \geq 0$ is the PML absorption profile.  This
+transformation preserves the form of the Schr\"{o}dinger equation in
+the PML region while making all outgoing waves evanescent — and
+crucially, \emph{without creating any reflection at the PML interface},
+regardless of the angle or frequency of the incoming wave.
+
+For the 1D TDSE, the PML modification is equivalent to introducing a
+complex coordinate stretching factor $s(x)$:
+\begin{equation}
+  \Htop_\text{PML} \;=\;
+  -\frac{1}{2s(x)}\frac{\partial}{\partial x}\frac{1}{s(x)}\frac{\partial}{\partial x}
+  + V(x),
+  \quad s(x) = 1 + \ii\sigma(x)/\omega.
+\end{equation}
+The present simulation uses simple Dirichlet BCs, which are sufficient
+for the default parameters.  Implementing absorbing BCs would allow
+simulations on much smaller domains or over much longer times.
+
+\end{document}

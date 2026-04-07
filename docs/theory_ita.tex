@@ -1,0 +1,1380 @@
+\documentclass[12pt, a4paper]{article}
+
+% ── Codifica e lingua ───────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[italian]{babel}
+
+% ── Matematica ─────────────────────────────────────────────────────────────
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}
+\usepackage{physics}            % \bra, \ket, \norm, \abs, \dv, \pdv
+
+% ── Figure e impaginazione ─────────────────────────────────────────────────
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+
+% ── Hyperlink ──────────────────────────────────────────────────────────────
+\usepackage[colorlinks=true, linkcolor=blue!70!black,
+            citecolor=blue!70!black, urlcolor=blue!70!black]{hyperref}
+
+% ── Listati di codice ──────────────────────────────────────────────────────
+\usepackage{listings}
+\usepackage{xcolor}
+\lstset{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue!80!black}\bfseries,
+  commentstyle=\color{gray},
+  stringstyle=\color{green!50!black},
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny\color{gray}
+}
+
+% ── Comandi personalizzati ─────────────────────────────────────────────────
+\newcommand{\dt}{\Delta t}
+\newcommand{\dx}{\Delta x}
+\newcommand{\hb}{\hbar}
+\newcommand{\ii}{\mathrm{i}}          % unità immaginaria (diritta)
+\newcommand{\ee}{\mathrm{e}}          % numero di Eulero (diretto)
+\newcommand{\CN}{Crank--Nicolson}
+\newcommand{\Htop}{\hat{H}}
+\newcommand{\Ktop}{\hat{K}}
+\newcommand{\Vtop}{\hat{V}}
+
+% ── Bibliografia ───────────────────────────────────────────────────────────
+\usepackage[numbers, sort&compress]{natbib}
+
+% ───────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+% ── Frontespizio ───────────────────────────────────────────────────────────
+\begin{titlepage}
+  \centering
+  \vspace*{3cm}
+  {\LARGE\bfseries Soluzione Numerica dell'Equazione di Schr\"{o}dinger\\[6pt]
+   Dipendente dal Tempo\\[4pt]
+   tramite lo Schema di Crank--Nicolson\par}
+  \vspace{1.5cm}
+  {\large Tunnelling quantistico di un pacchetto d'onda gaussiano\\
+   attraverso una barriera di potenziale rettangolare\par}
+  \vspace{2cm}
+  {\large Ludovico Fecia di Cossato\par}
+  \vfill
+  {\large\itshape TDSE\_CN — note teoriche\par}
+  \vspace{0.5cm}
+  {\normalsize Unità atomiche ovunque: $\hbar = m_e = e = 1$\par}
+  \vspace{1cm}
+  {\normalsize \today\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Introduzione}
+% ═══════════════════════════════════════════════════════════════════════════
+
+L'equazione di Schr\"{o}dinger dipendente dal tempo (TDSE) governa
+l'evoluzione di qualsiasi sistema quantistico non relativistico.
+Anche in una sola dimensione spaziale, essa esibisce fenomeni ---
+allargamento del pacchetto d'onda, interferenza e tunnelling quantistico
+--- che non hanno analoghi classici e che sono centrali nella fisica e
+nella tecnologia moderne (diodi tunnel, microscopia a effetto tunnel,
+decadimento alfa nucleare, \ldots).
+
+Nonostante la sua profondità concettuale, la TDSE monodimensionale
+con potenziale statico è completamente trattabile numericamente: il
+problema si riduce a propagare un vettore complesso nel tempo attraverso
+una sequenza di sistemi lineari sparsi.  Ciò la rende un banco di prova
+ideale per i metodi alle differenze finite impliciti e per sviluppare
+l'intuizione sulla dinamica quantistica.
+
+Queste note descrivono la configurazione fisica, la struttura matematica
+della discretizzazione di \CN{} e l'algoritmo di Thomas utilizzato per
+risolvere il sistema tridiagonale risultante a ogni passo temporale.
+Una sezione finale analizza qualitativamente e quantitativamente
+l'output della simulazione numerica.
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Configurazione fisica}
+% ═══════════════════════════════════════════════════════════════════════════
+
+\subsection{L'equazione di Schr\"{o}dinger dipendente dal tempo}
+
+Lo stato di una particella quantistica monodimensionale è completamente
+descritto da una funzione d'onda a valori complessi
+$\psi(x,t) \in L^2(\mathbb{R})$.  La sua evoluzione temporale è
+governata dalla TDSE
+\begin{equation}
+  \ii\hbar\,\pdv{\psi}{t}(x,t) \;=\; \Htop\,\psi(x,t),
+  \label{eq:tdse}
+\end{equation}
+dove l'operatore hamiltoniano $\Htop = \Ktop + \Vtop$ si scompone in
+una parte cinetica
+\begin{equation}
+  \Ktop \;=\; -\frac{\hbar^2}{2m}\pdv[2]{}{x}
+\end{equation}
+e in un operatore di energia potenziale $\Vtop = V(x)$ che agisce
+moltiplicativamente.
+
+In \textbf{unità atomiche} ($\hbar = m_e = 1$) --- usate in tutto
+questo documento --- l'equazione \eqref{eq:tdse} diventa
+\begin{equation}
+  \ii\,\pdv{\psi}{t} \;=\;
+  \left[-\frac{1}{2}\pdv[2]{}{x} + V(x)\right]\psi.
+  \label{eq:tdse_au}
+\end{equation}
+
+\subsection{Interpretazione fisica della funzione d'onda}
+
+La funzione d'onda $\psi(x,t)$ non è direttamente osservabile.
+La quantità fisicamente significativa è la \emph{densità di
+probabilità}
+\begin{equation}
+  \rho(x,t) \;=\; |\psi(x,t)|^2,
+\end{equation}
+che fornisce la probabilità di trovare la particella tra $x$ e $x+dx$
+come $\rho(x,t)\,dx$.  La probabilità totale è conservata:
+\begin{equation}
+  \int_{-\infty}^{+\infty} |\psi(x,t)|^2\,dx \;=\; 1
+  \quad \forall\, t.
+  \label{eq:norm}
+\end{equation}
+Questo vincolo --- la \emph{conservazione della norma} o
+\emph{unitarietà} dell'evoluzione --- è uno dei controlli di
+consistenza più importanti per qualsiasi schema numerico.
+
+\subsection{Il pacchetto d'onda gaussiano}
+
+Lo stato iniziale scelto per questa simulazione è un \emph{pacchetto
+d'onda gaussiano}, lo stato quantistico che imita più da vicino una
+particella classica con posizione e momento definiti:
+\begin{equation}
+  \psi(x,0) \;=\; A\,\exp\!\left[-\frac{(x-x_0)^2}{4\sigma^2}\right]
+  \exp\!\left(\ii k_0 x\right),
+  \label{eq:gauss}
+\end{equation}
+dove:
+\begin{itemize}
+  \item $x_0$ è la posizione iniziale del centro del pacchetto,
+  \item $\sigma$ è la larghezza spaziale (deviazione standard di $\rho$),
+  \item $k_0$ è il vettore d'onda centrale, corrispondente al momento
+        medio $\langle p\rangle = \hbar k_0$,
+  \item $A = (2\pi\sigma^2)^{-1/4}$ è la costante di normalizzazione.
+\end{itemize}
+
+Il gaussiano è lo \emph{stato di minima incertezza}: satura la
+relazione di indeterminazione di Heisenberg
+$\Delta x\,\Delta p \geq \hbar/2$.  La sua trasformata di Fourier
+è anch'essa un gaussiano, centrato in $k_0$ con larghezza $1/(2\sigma)$,
+quindi la dispersione del momento è $\Delta p = \hbar/(2\sigma)$.
+
+L'energia cinetica media del pacchetto è
+\begin{equation}
+  E \;=\; \frac{\langle p\rangle^2}{2m} \;=\; \frac{k_0^2}{2}
+  \quad \text{(unità atomiche)}.
+  \label{eq:energy}
+\end{equation}
+Questa è la quantità da confrontare con l'altezza della barriera $V_0$
+per classificare il regime dinamico.
+
+\subsection{La barriera di potenziale rettangolare}
+
+Il potenziale esterno è una barriera rettangolare di altezza $V_0$ e
+larghezza $w$ posta in $x \in [x_\text{bar},\, x_\text{bar}+w]$:
+\begin{equation}
+  V(x) \;=\;
+  \begin{cases}
+    V_0 & \text{se } x_\text{bar} < x < x_\text{bar} + w, \\
+    0   & \text{altrimenti.}
+  \end{cases}
+  \label{eq:barrier}
+\end{equation}
+La barriera è il potenziale di scattering non banale più semplice e
+ammette una soluzione analitica esatta per stati a onda piana (si veda
+la Sezione~\ref{sec:tunnelling}), rendendola ideale per validare la
+numerica.
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Tunnelling quantistico}
+\label{sec:tunnelling}
+% ═══════════════════════════════════════════════════════════════════════════
+
+\subsection{Analisi stazionaria}
+
+Per un'onda piana monocromatica $\psi(x) = \ee^{\ii kx}$ con energia
+$E = k^2/2$, l'equazione di Schr\"{o}dinger può essere risolta
+piecewise in ciascuna regione.  Il raccordo della funzione d'onda e
+della sua derivata agli estremi della barriera fornisce il coefficiente
+di trasmissione esatto \cite{Griffiths2018}
+\begin{equation}
+  T \;=\; \left[1 + \frac{V_0^2\sinh^2(\kappa w)}{4E(V_0-E)}\right]^{-1}
+  \qquad (E < V_0),
+  \label{eq:T_tunnelling}
+\end{equation}
+dove $\kappa = \sqrt{2(V_0-E)}$ (unità atomiche) è la costante di
+decadimento evanescente all'interno della barriera.  Il coefficiente
+di riflessione è semplicemente $R = 1 - T$.
+
+Dalla \eqref{eq:T_tunnelling} emergono subito alcune caratteristiche
+qualitative:
+\begin{enumerate}
+  \item $T > 0$ anche quando $E < V_0$ --- questo è il \emph{tunnelling
+        quantistico}.  Classicamente, la particella non può penetrare
+        una regione in cui $E < V$.
+  \item $T$ decade \emph{esponenzialmente} con la larghezza della
+        barriera: per $\kappa w \gg 1$,
+        \begin{equation}
+          T \;\approx\; 16\,\frac{E}{V_0}\!\left(1 - \frac{E}{V_0}\right)
+          \ee^{-2\kappa w}.
+        \end{equation}
+  \item Nel regime sopra-barriera $E > V_0$, si ha comunque riflessione
+        parziale dovuta alla natura ondulatoria di $\psi$, con
+        \begin{equation}
+          T \;=\; \left[1 + \frac{V_0^2\sin^2(k' w)}{4E(E-V_0)}\right]^{-1},
+          \quad k' = \sqrt{2(E-V_0)}.
+        \end{equation}
+        La trasmissione risonante ($T = 1$) si verifica quando
+        $k'w = n\pi$.
+\end{enumerate}
+
+\subsection{Dinamica del pacchetto d'onda}
+
+Un pacchetto d'onda gaussiano è una sovrapposizione di onde piane:
+\begin{equation}
+  \psi(x,0) \;=\; \int_{-\infty}^{+\infty}
+  \tilde{\phi}(k)\,\ee^{\ii kx}\,\frac{dk}{2\pi},
+  \qquad
+  \tilde{\phi}(k) \propto \ee^{-(k-k_0)^2\sigma^2}\,\ee^{-\ii k x_0}.
+\end{equation}
+Ogni componente $k$ evolve indipendentemente e interagisce con la
+barriera con il proprio coefficiente $T(k)$.  Dopo l'evento di
+scattering, la funzione d'onda totale si divide in una parte
+\emph{riflessa} che viaggia verso sinistra e una parte
+\emph{trasmessa} che continua verso destra.
+
+Le probabilità integrate
+\begin{align}
+  R(t) &= \int_{-\infty}^{x_\text{bar}} |\psi(x,t)|^2\,dx, \\
+  T(t) &= \int_{x_\text{bar}}^{+\infty} |\psi(x,t)|^2\,dx
+\end{align}
+tendono a valori asintotici costanti dopo che lo scattering è
+completato.  Questi valori asintotici possono essere confrontati con
+la formula a onda piana \eqref{eq:T_tunnelling} valutata in $k = k_0$:
+l'accordo è atteso quando il pacchetto è stretto nello spazio $k$
+(grande $\sigma$).
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Metodo numerico}
+% ═══════════════════════════════════════════════════════════════════════════
+
+\subsection{Discretizzazione spaziale}
+
+Il dominio $[x_\text{min},\, x_\text{max}]$ è suddiviso in $N$ punti
+uniformemente spaziati con passo $\dx = L/(N-1)$, dove
+$L = x_\text{max} - x_\text{min}$.  La funzione d'onda è rappresentata
+dal vettore $\boldsymbol{\psi}^n \in \mathbb{C}^N$ con componenti
+$\psi_i^n \approx \psi(x_i, n\dt)$.
+
+La derivata seconda è sostituita dallo stencil simmetrico alle
+differenze finite del secondo ordine:
+\begin{equation}
+  \pdv[2]{\psi}{x}\bigg|_{x_i}
+  \;\approx\;
+  \frac{\psi_{i-1} - 2\psi_i + \psi_{i+1}}{\dx^2}
+  + \mathcal{O}(\dx^2).
+  \label{eq:fd_stencil}
+\end{equation}
+Questo approssima la parte cinetica di $\Htop$ con una matrice reale
+simmetrica tridiagonale $K$ con diagonale principale $-2/\dx^2$ e
+sottodiagonali $+1/\dx^2$ (moltiplicata per $-1/2$):
+\begin{equation}
+  [H_\text{disc}]_{ij}
+  \;=\;
+  -\frac{1}{2\dx^2}\begin{pmatrix}
+    -2 & 1 \\
+    1 & -2 & 1 \\
+      & \ddots & \ddots & \ddots \\
+      &        & 1 & -2 & 1 \\
+      &        &   & 1  & -2
+  \end{pmatrix}_{ij}
+  + V_i\,\delta_{ij}.
+  \label{eq:Hdisc}
+\end{equation}
+
+\subsection{Discretizzazione temporale: lo schema di Crank--Nicolson}
+
+Una discretizzazione esplicita (Eulero in avanti) della TDSE,
+\begin{equation}
+  \boldsymbol{\psi}^{n+1} = \boldsymbol{\psi}^n
+  - \ii\dt\, H_\text{disc}\,\boldsymbol{\psi}^n,
+\end{equation}
+è \emph{condizionatamente stabile}: il passo temporale deve soddisfare
+$\dt \lesssim \dx^2$, che per $\dx = 0{,}01$\,bohr significa
+$\dt \lesssim 10^{-4}$\,u.a. --- due ordini di grandezza inferiori
+al passo \CN{} usato qui.  Inoltre lo schema esplicito non conserva
+la norma esattamente.
+
+Lo \textbf{schema \CN{}} \cite{CrankNicolson1947} è un metodo
+implicito del secondo ordine che media il membro di destra tra il
+livello temporale corrente ($n$) e il successivo ($n+1$):
+\begin{equation}
+  \ii\,\frac{\boldsymbol{\psi}^{n+1} - \boldsymbol{\psi}^n}{\dt}
+  \;=\;
+  \frac{H_\text{disc}}{2}\!\left(\boldsymbol{\psi}^{n+1}
+  + \boldsymbol{\psi}^n\right).
+  \label{eq:cn_raw}
+\end{equation}
+Riarrangiando la \eqref{eq:cn_raw}:
+\begin{equation}
+  \underbrace{\left(I + \frac{\ii\dt}{2}\,H_\text{disc}\right)}_{A}
+  \boldsymbol{\psi}^{n+1}
+  \;=\;
+  \underbrace{\left(I - \frac{\ii\dt}{2}\,H_\text{disc}\right)}_{B}
+  \boldsymbol{\psi}^n,
+  \label{eq:cn_system}
+\end{equation}
+che è un sistema lineare $A\,\boldsymbol{\psi}^{n+1} = \mathbf{b}^n$
+con $\mathbf{b}^n = B\,\boldsymbol{\psi}^n$.
+
+\subsection{Proprietà dello schema di Crank--Nicolson}
+\label{sec:cn_properties}
+
+\paragraph{Stabilità incondizionata.}
+Gli autovalori di $H_\text{disc}$ sono reali (è hermitiano).  Per un
+autovalore $\lambda$, il fattore di amplificazione dello schema \CN{}
+è
+\begin{equation}
+  g \;=\; \frac{1 - \ii\dt\lambda/2}{1 + \ii\dt\lambda/2},
+\end{equation}
+che soddisfa $|g| = 1$ per \emph{qualsiasi} $\dt > 0$.  Lo schema è
+quindi \textbf{incondizionatamente stabile}: non è richiesta alcuna
+restrizione sul passo temporale per la stabilità.
+
+\paragraph{Conservazione della norma (probabilità).}
+Le matrici $A$ e $B$ soddisfano $B = A^\dagger$ (trasposta
+coniugata).  Il propagatore discreto $A^{-1}B$ è quindi
+\emph{unitario}:
+\begin{equation}
+  (A^{-1}B)^\dagger (A^{-1}B)
+  \;=\; B^\dagger (A^\dagger)^{-1} A^{-1} B
+  \;=\; A A^{-1} (A^\dagger)^{-1} B
+  \;=\; I.
+\end{equation}
+Di conseguenza, $\|\boldsymbol{\psi}^{n+1}\|^2 =
+\|\boldsymbol{\psi}^n\|^2$ a ogni passo --- la norma discreta è
+esattamente conservata (a meno di errori di arrotondamento in virgola
+mobile dell'ordine di $10^{-14}$).
+
+\paragraph{Accuratezza del secondo ordine.}
+L'errore di troncamento locale della \eqref{eq:cn_raw} è
+$\mathcal{O}(\dt^2)$ nel tempo e $\mathcal{O}(\dx^2)$ nello spazio,
+quindi lo schema è globalmente del secondo ordine in entrambe le
+variabili.
+
+\subsection{Struttura delle matrici}
+
+Le matrici $A$ e $B$ sono \emph{tridiagonali complesse}.  Definendo
+il parametro
+\begin{equation}
+  r \;=\; \frac{\dt}{4\dx^2},
+\end{equation}
+i loro elementi non nulli sono (per $1 \leq i \leq N-2$):
+\begin{alignat}{2}
+  A_{i,i}   &= 1 + \ii\frac{\dt}{2}\!\left(\frac{1}{\dx^2} + V_i\right),
+  &\quad A_{i,i\pm 1} &= -\ii r, \label{eq:A_elements}\\[4pt]
+  B_{i,i}   &= 1 - \ii\frac{\dt}{2}\!\left(\frac{1}{\dx^2} + V_i\right),
+  &\quad B_{i,i\pm 1} &= +\ii r. \label{eq:B_elements}
+\end{alignat}
+La prima e l'ultima riga impongono le condizioni al contorno di
+Dirichlet $\psi_0 = \psi_{N-1} = 0$: entrambe le righe sono impostate
+come riga identità $(1,\,0,\,\ldots)$ in $A$ e $B$.
+
+Poiché $V(x)$ è statico, $A$ e $B$ vengono \textbf{costruite una sola
+volta} prima del ciclo temporale e riutilizzate a ogni passo.
+
+\subsection{L'algoritmo di Thomas}
+\label{sec:thomas}
+
+A ogni passo temporale, il membro di destra è calcolato come prodotto
+matrice-vettore $\mathbf{b}^n = B\,\boldsymbol{\psi}^n$ (una
+scansione della griglia, $\mathcal{O}(N)$ operazioni), e il sistema
+tridiagonale risultante $A\,\boldsymbol{\psi}^{n+1} = \mathbf{b}^n$
+è risolto con l'\textbf{algoritmo di Thomas} \cite{Thomas1949}.
+
+L'algoritmo di Thomas è l'eliminazione gaussiana specializzata per
+sistemi tridiagonali.  Per un sistema con sottodiagonale $l_i$,
+diagonale principale $d_i$, sopradiagonale $u_i$ e membro di destra
+$b_i$:
+
+\paragraph{Sweep in avanti} (eliminazione di $l_i$, da $i=1$ a $N-1$):
+\begin{align}
+  w_i &= l_i / d_{i-1}, \\
+  d_i &\leftarrow d_i - w_i\,u_{i-1}, \\
+  b_i &\leftarrow b_i - w_i\,b_{i-1}.
+\end{align}
+
+\paragraph{Sostituzione all'indietro} (da $i=N-1$ a $0$):
+\begin{align}
+  x_{N-1} &= b_{N-1}/d_{N-1}, \\
+  x_i     &= (b_i - u_i\,x_{i+1}) / d_i.
+\end{align}
+
+Il costo totale è $\mathcal{O}(N)$ sia in tempo che in memoria ---
+ottimale per un sistema tridiagonale.  L'algoritmo è numericamente
+stabile per matrici a dominanza diagonale, condizione che la matrice
+\CN{} $A$ soddisfa sempre (la diagonale principale domina perché
+$|A_{ii}| > 2|A_{i,i\pm 1}|$ ogni volta che $\dt/\dx^2 < 2$,
+facilmente soddisfatta in pratica).
+
+Questo è lo stesso algoritmo implementato dalla routine LAPACK
+\texttt{zgtsv}, qui realizzato esplicitamente in aritmetica complessa
+senza alcuna dipendenza da librerie esterne.
+
+\subsection{Condizioni al contorno}
+
+Vengono imposte condizioni al contorno di \textbf{Dirichlet}:
+$\psi(x_\text{min},t) = \psi(x_\text{max},t) = 0$.  Fisicamente,
+le pareti si comportano come barriere di potenziale infinite.
+Introducono riflessioni artificiali se il pacchetto d'onda raggiunge
+il bordo, quindi la lunghezza del dominio $L$ deve essere scelta
+sufficientemente grande affinché il pacchetto rimanga lontano dalle
+pareti per tutta la simulazione.
+
+Un criterio pratico è $x_\text{min} \ll x_0 - k_0 T_\text{tot}$ e
+$x_\text{max} \gg x_0 + k_0 T_\text{tot}$, dove $k_0 T_\text{tot}$
+è la distanza approssimativa percorsa dal centro del pacchetto.
+
+\subsection{Schema dell'algoritmo}
+
+L'algoritmo completo di avanzamento temporale è:
+
+\begin{enumerate}
+  \item Leggere i parametri e costruire la griglia $\{x_i\}$ e il
+        potenziale $\{V_i\}$.
+  \item Inizializzare $\boldsymbol{\psi}^0$ come gaussiano
+        normalizzato \eqref{eq:gauss}.
+  \item Costruire le matrici tridiagonali $A$ e $B$ (una volta sola).
+  \item \textbf{Per} $n = 0, 1, \ldots, M-1$:
+  \begin{enumerate}
+    \item[(a)] Calcolare $\mathbf{b}^n = B\,\boldsymbol{\psi}^n$
+               (prodotto matrice-vettore, $\mathcal{O}(N)$).
+    \item[(b)] Risolvere $A\,\boldsymbol{\psi}^{n+1} = \mathbf{b}^n$
+               con l'algoritmo di Thomas ($\mathcal{O}(N)$).
+    \item[(c)] Imporre $\psi_0^{n+1} = \psi_{N-1}^{n+1} = 0$.
+    \item[(d)] Scrivere lo snapshot e la norma su file (se passo
+               di snapshot).
+  \end{enumerate}
+\end{enumerate}
+Costo per passo temporale: $\mathcal{O}(N)$.  Costo totale:
+$\mathcal{O}(MN)$.
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Analisi dell'output della simulazione}
+% ═══════════════════════════════════════════════════════════════════════════
+
+Questa sezione descrive il comportamento fisico atteso e le
+corrispondenti firme in ciascuno dei tre grafici prodotti dagli script
+Python di analisi.
+
+I parametri predefiniti della simulazione sono:
+\begin{center}
+\begin{tabular}{lll}
+\hline
+Parametro & Valore & Ruolo \\
+\hline
+$L$ & 20\,bohr & lunghezza del dominio \\
+$\dx$ & 0,01\,bohr & passo spaziale \\
+$\dt$ & 0,001\,u.a. & passo temporale \\
+$T_\text{tot}$ & 2,0\,u.a. & tempo totale \\
+$x_0$ & $-5{,}0$\,bohr & centro iniziale del pacchetto \\
+$\sigma$ & 0,5\,bohr & larghezza del pacchetto \\
+$k_0$ & 5,0\,bohr$^{-1}$ & vettore d'onda centrale \\
+$x_\text{bar}$ & 0,0\,bohr & bordo sinistro della barriera \\
+$w$ & 0,5\,bohr & larghezza della barriera \\
+$V_0$ & 20,0\,$E_h$ & altezza della barriera \\
+\hline
+\end{tabular}
+\end{center}
+
+L'energia cinetica media del pacchetto è $E = k_0^2/2 = 12{,}5\,E_h$,
+mentre l'altezza della barriera è $V_0 = 20{,}0\,E_h$, quindi
+$E < V_0$: la simulazione è nel \textbf{regime di tunnelling}.
+La costante di decadimento evanescente all'interno della barriera è
+$\kappa = \sqrt{2(V_0-E)} \approx 3{,}87$\,bohr$^{-1}$, che fornisce
+una probabilità di trasmissione approssimativa dalla
+\eqref{eq:T_tunnelling}:
+\begin{equation}
+  T_\text{analitico} \;\approx\;
+  \left[1 + \frac{20^2\sinh^2(3{,}87\times 0{,}5)}{4\times 12{,}5\times 7{,}5}
+  \right]^{-1}
+  \;\approx\; 0{,}04.
+  \label{eq:T_predicted}
+\end{equation}
+Ci si aspetta che circa il 4\% della probabilità attraversi la
+barriera per tunnelling, con il restante 96\% riflesso.
+
+\subsection{Grafico degli snapshot (\texttt{snapshots.png})}
+
+\paragraph{Cosa viene mostrato.}
+Cinque pannelli mostrano $|\psi(x,t)|^2$ a tempi equidistanti
+$t = 0,\, T/4,\, T/2,\, 3T/4,\, T$.
+La barriera di potenziale è mostrata come una regione ombreggiata
+scalata alla densità di probabilità massima come riferimento visivo.
+
+\paragraph{Comportamento atteso.}
+\begin{itemize}
+  \item \textbf{$t = 0$}: Un singolo picco gaussiano centrato in
+        $x_0 = -5$\,bohr, ben a sinistra della barriera.
+        La larghezza è $\sigma = 0{,}5$\,bohr.
+
+  \item \textbf{Fase di propagazione ($t \approx T/4$)}: Il pacchetto
+        si muove verso destra alla velocità di gruppo
+        $v_g = k_0 = 5$\,bohr/u.a.  Si allarga gradualmente per
+        dispersione: poiché componenti $k$ diverse viaggiano a velocità
+        leggermente diverse $v(k) = k$, il pacchetto si espande come
+        $\sigma(t) \approx \sqrt{\sigma^2 + t^2/(4\sigma^2)}$.
+
+  \item \textbf{Scattering ($t \approx T/2$)}: Il pacchetto raggiunge
+        la barriera.  La densità di probabilità viene temporaneamente
+        compressa e deformata --- il bordo di attacco decelera mentre
+        la coda lo raggiunge.  Una piccola frazione trasmessa filtra
+        dal lato destro della barriera.
+
+  \item \textbf{Post-scattering ($t \approx 3T/4$ e $T$)}: Due picchi
+        distinti sono visibili.  Un grande pacchetto riflesso viaggia
+        verso sinistra; un piccolo pacchetto trasmesso continua verso
+        destra.  Le aree relative sotto i due picchi riflettono il
+        rapporto $R:T \approx 96:4$.
+\end{itemize}
+
+\paragraph{Cosa cercare.}
+L'area totale sotto la curva (norma) deve rimanere costante in tutti
+i pannelli.  Qualsiasi crescita o decrescita visibile segnala un
+problema numerico.
+
+\subsection{Grafico di analisi quantitativa (\texttt{analysis.png})}
+
+\subsubsection{Pannello A: Conservazione della norma}
+
+\paragraph{Cosa viene mostrato.}
+La norma discreta $\|\boldsymbol{\psi}^n\|^2_\dx = \dx\sum_i |\psi_i^n|^2$
+in funzione del tempo, confrontata con il valore esatto di~1.
+
+\paragraph{Comportamento atteso.}
+Poiché il propagatore \CN{} è unitario
+(Sezione~\ref{sec:cn_properties}), la deviazione della norma dovrebbe
+essere $|\|\psi^n\|^2 - 1| \lesssim 10^{-12}$ per tutto il tempo ---
+essenzialmente la precisione di macchina.  Questo è fondamentalmente
+diverso dagli schemi espliciti, che dissipano o amplificano la norma.
+
+\paragraph{Cosa cercare.}
+Una linea piatta a 1 conferma l'unitarietà del propagatore numerico.
+Qualsiasi deriva monotona indicherebbe un bug implementativo; una
+deriva oscillatoria suggerirebbe problemi di stabilità.
+
+\subsubsection{Pannello B: Coefficienti di trasmissione e riflessione}
+
+\paragraph{Cosa viene mostrato.}
+L'evoluzione temporale di
+\begin{equation}
+  R(t) = \dx\sum_{i:\,x_i < x_\text{bar}} |\psi_i|^2,
+  \qquad
+  T(t) = \dx\sum_{i:\,x_i \geq x_\text{bar}} |\psi_i|^2,
+\end{equation}
+insieme alla loro somma $R(t) + T(t)$.
+
+\paragraph{Comportamento atteso.}
+Inizialmente $R \approx 1$ e $T \approx 0$ (tutto il pacchetto a
+sinistra della barriera).  Man mano che il pacchetto raggiunge e
+interagisce con la barriera, $R$ diminuisce e $T$ aumenta.  Dopo che
+lo scattering è completato, entrambi i coefficienti raggiungono i
+valori asintotici: $T_\infty \approx 0{,}04$ e $R_\infty \approx 0{,}96$
+dalla \eqref{eq:T_predicted}.
+
+La somma $R(t) + T(t)$ deve rimanere uguale a 1 in ogni momento (è
+solo un altro modo di scrivere la conservazione della norma),
+fornendo un controllo di autoconsistenza.  Durante la fase di
+scattering, $R+T$ può apparire leggermente ridotta se la funzione
+d'onda si estende \emph{attraverso} il bordo della barriera, ma si
+tratta di un effetto di frontiera della regione di integrazione, non
+di una violazione fisica.
+
+\paragraph{Cosa cercare.}
+Il valore asintotico di $T_\infty$ può essere confrontato direttamente
+con il risultato analitico a onda piana \eqref{eq:T_predicted}.
+Le discrepanze derivano dal fatto che il pacchetto gaussiano ha una
+dispersione finita nel momento; il risultato del pacchetto d'onda
+converge alla formula a onda piana nel limite $\sigma \to \infty$
+(distribuzione stretta in $k$).
+
+\subsubsection{Pannello C: Posizione media $\langle x \rangle(t)$}
+
+\paragraph{Cosa viene mostrato.}
+Il valore di aspettazione della posizione,
+\begin{equation}
+  \langle x\rangle(t) \;=\; \dx\sum_i x_i\,|\psi_i(t)|^2,
+\end{equation}
+in funzione del tempo.
+
+\paragraph{Comportamento atteso.}
+\begin{itemize}
+  \item \textbf{Prima della barriera}: $\langle x\rangle$ cresce
+        linearmente con pendenza $v_g = k_0 = 5$\,bohr/u.a.,
+        riflettendo il moto classico del centro del pacchetto.
+
+  \item \textbf{Durante lo scattering}: la pendenza diminuisce man
+        mano che il pacchetto interagisce con la barriera.
+        Classicamente, la particella verrebbe riflessa istantaneamente;
+        quantisticamente, l'interazione si estende su un tempo finito
+        (collegato al \emph{tempo di ritardo di Wigner}).
+
+  \item \textbf{Dopo lo scattering}: $\langle x\rangle$ è la media
+        pesata per la probabilità dei centri riflesso e trasmesso.
+        Poiché $R \gg T$, la posizione media si muove verso sinistra
+        (il pacchetto riflesso domina).  La pendenza del regime
+        lineare asintotico sarà negativa, circa $-k_0 R_\infty$.
+\end{itemize}
+
+\paragraph{Cosa cercare.}
+La transizione da pendenza positiva a negativa segnala il momento
+dello scattering.  La pendenza asintotica codifica il peso relativo
+delle componenti riflessa e trasmessa.
+
+\subsubsection{Pannello D: Larghezza del pacchetto $\sigma(t)$}
+
+\paragraph{Cosa viene mostrato.}
+La larghezza quadratica media del pacchetto,
+\begin{equation}
+  \sigma(t) \;=\; \sqrt{\langle x^2\rangle - \langle x\rangle^2},
+  \quad
+  \langle x^2\rangle = \dx\sum_i x_i^2\,|\psi_i|^2.
+\end{equation}
+
+\paragraph{Comportamento atteso.}
+\begin{itemize}
+  \item \textbf{Propagazione libera}: un pacchetto d'onda gaussiano
+        in spazio libero si allarga come
+        \begin{equation}
+          \sigma(t) \;=\; \sigma_0\,\sqrt{1 +
+          \left(\frac{t}{2\sigma_0^2}\right)^2},
+          \label{eq:spreading}
+        \end{equation}
+        che per $t \gg 2\sigma_0^2 = 0{,}5$\,u.a. diventa lineare:
+        $\sigma(t) \approx t/(2\sigma_0)$.
+
+  \item \textbf{Dopo lo scattering}: la larghezza cresce più
+        rapidamente del risultato in spazio libero.  La ragione fisica
+        è che la funzione d'onda si divide in due componenti
+        spazialmente separate (riflessa e trasmessa), e la varianza
+        $\langle x^2\rangle - \langle x\rangle^2$ riceve un contributo
+        grande dalla \emph{distanza tra i due picchi}, non solo dalla
+        larghezza di ciascun picco individuale.  Questo è un effetto
+        puramente quantistico di interferenza.
+\end{itemize}
+
+\paragraph{Cosa cercare.}
+Un chiaro cambiamento di pendenza al momento dello scattering: il
+tasso di crescita di $\sigma(t)$ aumenta bruscamente quando il
+pacchetto si divide.
+
+\subsection{Animazione (\texttt{evolution.mp4})}
+
+L'animazione mostra simultaneamente $|\psi(x,t)|^2$ (linea continua
+blu) e $\mathrm{Re}[\psi(x,t)]$ (linea tratteggiata arancione), che
+rivela la struttura di fase oscillatoria della funzione d'onda.
+
+\paragraph{Comportamento atteso.}
+\begin{itemize}
+  \item La parte reale oscilla alla frequenza spaziale $k_0$, visibile
+        come rapide oscillazioni all'interno dell'inviluppo del pacchetto.
+  \item Man mano che il pacchetto si avvicina alla barriera, le
+        oscillazioni nella regione della barriera vengono soppresse
+        esponenzialmente (onda evanescente).
+  \item Dopo l'interazione, il pacchetto riflesso mostra oscillazioni
+        che viaggiano nella direzione $-x$ (fase decrescente nel
+        tempo), mentre il piccolo pacchetto trasmesso oscilla nella
+        direzione $+x$.
+  \item L'interferenza tra le componenti incidente e riflessa è
+        visibile come un pattern di onda stazionaria a sinistra della
+        barriera durante la fase di scattering.
+\end{itemize}
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Parametri numerici: stabilità e accuratezza}
+% ═══════════════════════════════════════════════════════════════════════════
+
+\subsection{Requisiti di risoluzione della griglia}
+
+Affinché la simulazione rappresenti fedelmente il pacchetto d'onda,
+la griglia deve risolvere le scale di lunghezza fisiche più brevi:
+
+\begin{itemize}
+  \item \textbf{Spaziale}: la lunghezza d'onda di de Broglie
+        $\lambda = 2\pi/k_0$ deve essere risolta con diversi punti
+        della griglia.  Per $k_0 = 5$, $\lambda \approx 1{,}26$\,bohr,
+        e $\dx = 0{,}01$\,bohr fornisce $\approx 126$ punti per
+        lunghezza d'onda --- più che sufficiente.
+
+  \item \textbf{All'interno della barriera}: la lunghezza di decadimento
+        evanescente è $1/\kappa \approx 0{,}26$\,bohr per i parametri
+        predefiniti.  Con $\dx = 0{,}01$, ci sono $\approx 26$ punti per
+        lunghezza di decadimento, il che è adeguato.
+
+  \item \textbf{Temporale}: lo schema \CN{} è incondizionatamente
+        stabile, quindi $\dt$ è vincolato solo dall'\emph{accuratezza}.
+        Un criterio pratico è $\dt \ll 1/E_\text{max}$, dove
+        $E_\text{max} \approx k_\text{max}^2/2$ è l'energia massima
+        nello spettro.  Per $k_\text{max} \approx k_0 + 3/(2\sigma)
+        \approx 8$, $E_\text{max} \approx 32$\,u.a., da cui
+        $\dt \ll 0{,}03$\,u.a.  Il valore predefinito $\dt = 0{,}001$\,u.a.\
+        soddisfa agevolmente questo requisito.
+\end{itemize}
+
+\subsection{Numero di Courant}
+
+Sebbene lo schema \CN{} sia incondizionatamente stabile, il numero
+di Courant effettivo $\nu = k_0\dt/\dx = 5 \times 0{,}001 / 0{,}01 = 0{,}5$
+fornisce un'indicazione dell'accuratezza della velocità di fase.
+Valori $\nu \lesssim 1$ garantiscono che la velocità di gruppo
+numerica sia vicina a quella analitica.
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Conclusioni}
+% ═══════════════════════════════════════════════════════════════════════════
+
+Lo schema \CN{} fornisce un metodo robusto, del secondo ordine e
+conservativo della norma per propagare la TDSE.  La sua natura
+implicita elimina la restrizione sul passo temporale che affligge gli
+schemi espliciti, e la struttura tridiagonale del sistema lineare
+risultante rende ogni passo $\mathcal{O}(N)$ tramite l'algoritmo di
+Thomas.
+
+La simulazione riproduce le caratteristiche quantistiche fondamentali
+dello scattering su barriera: allargamento del pacchetto d'onda,
+tunnelling attraverso una regione classicamente proibita e divisione
+del pacchetto in componenti riflessa e trasmessa.  Il confronto
+quantitativo tra il coefficiente di trasmissione calcolato
+numericamente e la formula analitica a onda piana fornisce una
+validazione diretta sia del modello fisico che dell'implementazione
+numerica.
+
+\clearpage
+
+% ═══════════════════════════════════════════════════════════════════════════
+\begin{thebibliography}{99}
+
+\bibitem{Griffiths2018}
+D.~J.~Griffiths e D.~F.~Schroeter,
+\textit{Introduction to Quantum Mechanics}, 3\textsuperscript{a} ed.,
+Cambridge University Press, 2018.
+
+\bibitem{CrankNicolson1947}
+J.~Crank e P.~Nicolson,
+``A practical method for numerical evaluation of solutions of partial
+differential equations of the heat-conduction type,''
+\textit{Proc.\ Camb.\ Phil.\ Soc.}, vol.~43, pp.~50--67, 1947.
+
+\bibitem{Thomas1949}
+L.~H.~Thomas,
+``Elliptic problems in linear difference equations over a network,''
+Watson Sci.\ Comput.\ Lab.\ Report, Columbia University, 1949.
+
+\bibitem{Tannor2007}
+D.~J.~Tannor,
+\textit{Introduction to Quantum Mechanics: A Time-Dependent Perspective},
+University Science Books, 2007.
+
+\bibitem{NumericalRecipes}
+W.~H.~Press, S.~A.~Teukolsky, W.~T.~Vetterling e B.~P.~Flannery,
+\textit{Numerical Recipes: The Art of Scientific Computing},
+3\textsuperscript{a} ed., Cambridge University Press, 2007.
+
+\bibitem{Sakurai2017}
+J.~J.~Sakurai e J.~Napolitano,
+\textit{Modern Quantum Mechanics}, 3\textsuperscript{a} ed.,
+Cambridge University Press, 2021.
+
+\bibitem{Cohen1977}
+C.~Cohen-Tannoudji, B.~Diu e F.~Lalo\"{e},
+\textit{Quantum Mechanics}, voll.~I e II,
+Wiley, 1977.
+
+\bibitem{Hairer1993}
+E.~Hairer, S.~P.~N\o rsett e G.~Wanner,
+\textit{Solving Ordinary Differential Equations I: Nonstiff Problems},
+2\textsuperscript{a} ed., Springer, 1993.
+
+\bibitem{Leforestier1991}
+C.~Leforestier et al.,
+``A comparison of different propagation schemes for the time-dependent
+Schr\"{o}dinger equation,''
+\textit{J.\ Comput.\ Phys.}, vol.~94, pp.~59--80, 1991.
+
+\bibitem{Wigner1955}
+E.~P.~Wigner,
+``Lower limit for the energy derivative of the scattering phase shift,''
+\textit{Phys.\ Rev.}, vol.~98, pp.~145--147, 1955.
+
+\end{thebibliography}
+
+\clearpage
+
+% ═══════════════════════════════════════════════════════════════════════════
+\appendix
+% ═══════════════════════════════════════════════════════════════════════════
+
+% ───────────────────────────────────────────────────────────────────────────
+\section{Spazio degli stati quantistici e formalismo di Dirac}
+\label{app:hilbert}
+% ───────────────────────────────────────────────────────────────────────────
+
+\subsection{Struttura dello spazio di Hilbert}
+
+La cornice matematica rigorosa della meccanica quantistica è uno
+\emph{spazio di Hilbert complesso separabile} $\mathcal{H}$.  Per una
+particella monodimensionale priva di spin, la scelta naturale è
+$\mathcal{H} = L^2(\mathbb{R})$: lo spazio delle funzioni complesse
+a quadrato integrabile su $\mathbb{R}$, dotato del prodotto interno
+\begin{equation}
+  \langle f, g\rangle \;=\; \int_{-\infty}^{+\infty} f^*(x)\,g(x)\,dx.
+\end{equation}
+Uno stato fisico corrisponde a un \emph{vettore unitario} (raggio) in
+$\mathcal{H}$, cioè $\|\psi\| = 1$.
+
+Nella notazione di Dirac, gli stati sono \emph{ket}
+$\ket{\psi} \in \mathcal{H}$ e i loro duali sono \emph{bra}
+$\bra{\psi} \in \mathcal{H}^*$.  Il prodotto interno è
+$\braket{\phi}{\psi}$ e la norma è
+$\|\psi\|^2 = \braket{\psi}{\psi}$.
+
+\subsection{Osservabili come operatori autoaggiunti}
+
+Ogni osservabile fisico $A$ corrisponde a un operatore
+\emph{autoaggiunto} (hermitiano)
+$\hat{A}: \mathcal{H} \to \mathcal{H}$, definito da
+$\hat{A}^\dagger = \hat{A}$.  L'autoaggiunzione garantisce:
+\begin{itemize}
+  \item Tutti gli autovalori sono reali (le quantità misurabili devono
+        essere reali).
+  \item Gli autovettori corrispondenti ad autovalori distinti sono
+        ortogonali.
+  \item Gli autovettori formano una base ortonormale completa di
+        $\mathcal{H}$ (teorema spettrale).
+\end{itemize}
+
+Per spettri continui (posizione, momento), gli autoket sono
+distribuzioni e non vere funzioni $L^2$.  Gli autoket della posizione
+$\ket{x'}$ soddisfano
+\begin{equation}
+  \hat{x}\ket{x'} = x'\ket{x'}, \qquad
+  \braket{x}{x'} = \delta(x-x'), \qquad
+  \int_{-\infty}^{+\infty} \ket{x'}\bra{x'}\,dx' = \hat{I},
+\end{equation}
+e la funzione d'onda è la proiezione
+$\psi(x,t) = \braket{x}{\psi(t)}$.
+
+\subsection{La relazione di commutazione canonica}
+
+Gli operatori posizione e momento soddisfano
+\begin{equation}
+  [\hat{x},\, \hat{p}] \;=\; \ii\hbar\,\hat{I}.
+  \label{eq:ccr}
+\end{equation}
+Nella rappresentazione della posizione,
+$\hat{p} = -\ii\hbar\,\partial_x$.  La relazione di commutazione
+\eqref{eq:ccr} è la radice algebrica del principio di indeterminazione
+di Heisenberg: per qualsiasi stato $\ket{\psi}$,
+\begin{equation}
+  \Delta x\,\Delta p \;\geq\; \frac{\hbar}{2},
+\end{equation}
+dove $(\Delta A)^2 = \langle \hat{A}^2\rangle - \langle\hat{A}\rangle^2$.
+Il pacchetto d'onda gaussiano \eqref{eq:gauss} satura questo limite,
+rendendolo lo \emph{stato coerente} dell'algebra di Weyl--Heisenberg.
+
+\subsection{Operatore di evoluzione temporale e unitarietà}
+
+La soluzione formale della TDSE è
+\begin{equation}
+  \ket{\psi(t)} \;=\; \hat{U}(t,t_0)\,\ket{\psi(t_0)},
+  \qquad
+  \hat{U}(t,t_0) = \exp\!\left[-\frac{\ii}{\hbar}\hat{H}(t-t_0)\right],
+\end{equation}
+dove l'ultima espressione vale per $\hat{H}$ indipendente dal tempo.
+L'operatore $\hat{U}$ è \emph{unitario}:
+$\hat{U}^\dagger \hat{U} = \hat{I}$, che è l'enunciato operatoriale
+della conservazione della probabilità.  Il propagatore \CN{}
+$A^{-1}B$ è un'approssimazione unitaria finito-dimensionale di
+$\hat{U}(\dt)$.
+
+% ───────────────────────────────────────────────────────────────────────────
+\section{Metodo della matrice di trasferimento e formule esatte di tunnelling}
+\label{app:transfer}
+% ───────────────────────────────────────────────────────────────────────────
+
+\subsection{Soluzione piecewise dell'equazione di Schr\"{o}dinger stazionaria}
+
+Per un potenziale statico, la TDSE si separa tramite
+$\psi(x,t) = \phi(x)\,\ee^{-\ii Et/\hbar}$, fornendo
+l'\emph{equazione di Schr\"{o}dinger indipendente dal tempo} (TISE):
+\begin{equation}
+  -\frac{1}{2}\phi''(x) + V(x)\phi(x) \;=\; E\,\phi(x).
+\end{equation}
+
+Per la barriera rettangolare \eqref{eq:barrier}, la TISE ha
+coefficienti piecewise costanti.  In ciascuna regione la soluzione
+generale è:
+\begin{align}
+  \text{Regione I } (x < x_\text{bar}):&\quad
+    \phi(x) = A\,\ee^{\ii kx} + B\,\ee^{-\ii kx},
+    \quad k = \sqrt{2E}, \\
+  \text{Regione II } (x_\text{bar} < x < x_\text{bar}+w):&\quad
+    \phi(x) = C\,\ee^{\kappa x} + D\,\ee^{-\kappa x},
+    \quad \kappa = \sqrt{2(V_0-E)},\quad (E<V_0), \\
+  \text{Regione III } (x > x_\text{bar}+w):&\quad
+    \phi(x) = F\,\ee^{\ii kx},
+\end{align}
+dove $F\ee^{\ii kx}$ è l'onda trasmessa (nessuna componente che si
+muove verso sinistra nella regione III per un'onda incidente da destra).
+
+\subsection{La matrice di trasferimento}
+
+A ogni interfaccia, la continuità di $\phi$ e $\phi'$ fornisce due
+condizioni di raccordo.  Queste possono essere codificate
+compattamente in una \emph{matrice di trasferimento} $2\times 2$
+tale che
+\begin{equation}
+  \begin{pmatrix} A \\ B \end{pmatrix}
+  \;=\; M \begin{pmatrix} F \\ 0 \end{pmatrix}.
+\end{equation}
+Per la barriera rettangolare,
+$M = M_{\text{I}\to\text{II}}\cdot M_{\text{II}\to\text{III}}$,
+dove ogni matrice di interfaccia è
+\begin{equation}
+  M_{j\to k} \;=\; \frac{1}{2q_k}
+  \begin{pmatrix}
+    q_k + q_j & q_k - q_j \\
+    q_k - q_j & q_k + q_j
+  \end{pmatrix},
+\end{equation}
+con $q_j$ vettore d'onda (eventualmente immaginario) nella regione
+$j$.  L'ampiezza di trasmissione è $t = 1/M_{11}$ e
+\begin{equation}
+  T = |t|^2 = \frac{1}{|M_{11}|^2},
+\end{equation}
+che, dopo il calcolo esplicito, riproduce la \eqref{eq:T_tunnelling}.
+Il formalismo della matrice di trasferimento si generalizza
+direttamente a potenziali piecewise costanti arbitrari.
+
+\subsection{Approssimazione WKB}
+
+Per una barriera di potenziale \emph{regolare}, la matrice di
+trasferimento esatta non è disponibile in forma chiusa.
+L'approssimazione di Wentzel--Kramers--Brillouin (WKB) sostituisce
+la soluzione evanescente esatta all'interno della barriera con un
+ansatz a onda piana locale:
+\begin{equation}
+  \phi(x) \;\approx\;
+  \frac{C}{\sqrt{\kappa(x)}}\,\exp\!\left[-\int_{x_1}^{x}\kappa(x')\,dx'\right],
+  \quad \kappa(x) = \sqrt{2(V(x)-E)},
+\end{equation}
+dove $x_1$, $x_2$ sono i punti di inversione classici
+($V(x_{1,2}) = E$).  Il coefficiente di trasmissione WKB è
+\begin{equation}
+  T_\text{WKB} \;\approx\; \exp\!\left[-2\int_{x_1}^{x_2}\kappa(x)\,dx\right].
+  \label{eq:wkb}
+\end{equation}
+Per la barriera rettangolare, $\kappa(x) = \kappa = \text{cost.}$ e
+la \eqref{eq:wkb} dà $T \approx \ee^{-2\kappa w}$, coerente con il
+limite $\kappa w \gg 1$ della \eqref{eq:T_tunnelling}.
+
+% ───────────────────────────────────────────────────────────────────────────
+\section{Relazione di dispersione e dinamica del pacchetto libero}
+\label{app:dispersion}
+% ───────────────────────────────────────────────────────────────────────────
+
+\subsection{Relazione di dispersione}
+
+Per una particella libera ($V=0$), sostituendo un'onda piana
+$\psi = \ee^{\ii(kx - \omega t)}$ nella TDSE si ottiene la
+\emph{relazione di dispersione}
+\begin{equation}
+  \omega(k) \;=\; \frac{k^2}{2} \quad \text{(unità atomiche)}.
+\end{equation}
+Questa è una dispersione \emph{quadratica}, a differenza della
+dispersione lineare dei fotoni.  Due velocità caratterizzano la
+propagazione del pacchetto d'onda:
+\begin{align}
+  v_\text{fase}  &= \frac{\omega}{k} = \frac{k}{2}, \\
+  v_\text{gruppo} &= \frac{d\omega}{dk} = k.
+\end{align}
+La velocità di gruppo $v_g = k_0$ è la velocità del centro di massa
+del pacchetto e coincide con la velocità classica $p/m = k_0$ in
+unità atomiche.
+
+\subsection{Propagazione libera esatta del pacchetto gaussiano}
+
+Un pacchetto d'onda gaussiano in spazio libero può essere propagato
+esattamente usando il teorema di convoluzione di Fourier.  Partendo
+dalla \eqref{eq:gauss}, la sua trasformata di Fourier è
+\begin{equation}
+  \tilde{\phi}(k,0) \;=\;
+  (2\pi\sigma^2)^{1/4}\,\sigma\,\ee^{-(k-k_0)^2\sigma^2}\,\ee^{-\ii k x_0}.
+\end{equation}
+Al tempo $t$, ogni modo acquista una fase $\ee^{-\ii\omega(k)t}$:
+\begin{equation}
+  \tilde{\phi}(k,t) \;=\; \tilde{\phi}(k,0)\,\ee^{-\ii k^2 t/2}.
+\end{equation}
+Ritrasformando si ottiene
+\begin{equation}
+  \psi(x,t) \;=\;
+  \left(\frac{1}{2\pi\sigma_t^2}\right)^{1/4}
+  \exp\!\left[-\frac{(x - x_0 - k_0 t)^2}{4\sigma_t^2}\right]
+  \exp\!\left[\ii k_0\!\left(x - \frac{k_0 t}{2}\right)\right]
+  \exp\!\left[\ii\phi_t\right],
+  \label{eq:free_packet}
+\end{equation}
+dove la \emph{larghezza complessa} è
+\begin{equation}
+  \sigma_t \;=\; \sigma\sqrt{1 + \ii t/(2\sigma^2)},
+\end{equation}
+e $\phi_t = -\frac{1}{2}\arg(\sigma_t/\sigma)$ è una fase globale.
+La densità di probabilità è ancora gaussiana:
+\begin{equation}
+  |\psi(x,t)|^2 \;=\;
+  \frac{1}{\sqrt{2\pi}|\sigma_t|}
+  \exp\!\left[-\frac{(x-x_0-k_0 t)^2}{2|\sigma_t|^2}\right],
+\end{equation}
+con larghezza reale $|\sigma_t| = \sigma\sqrt{1 + t^2/(4\sigma^4)}$,
+che è esattamente l'equazione \eqref{eq:spreading}.
+
+Il tasso di allargamento $d|\sigma_t|/dt \to 1/(2\sigma)$ per $t$
+grande è inversamente proporzionale alla larghezza iniziale: un
+pacchetto stretto (piccolo $\sigma$, grande dispersione del momento)
+si allarga più rapidamente.
+
+% ───────────────────────────────────────────────────────────────────────────
+\section{Splitting degli operatori e forma di Cayley}
+\label{app:splitting}
+% ───────────────────────────────────────────────────────────────────────────
+
+\subsection{Il propagatore esatto come esponenziale di matrice}
+
+La soluzione formale della TDSE su un passo temporale è
+\begin{equation}
+  \boldsymbol{\psi}^{n+1} \;=\;
+  \ee^{-\ii\dt H_\text{disc}}\,\boldsymbol{\psi}^n.
+\end{equation}
+Il calcolo diretto dell'esponenziale di matrice costa $\mathcal{O}(N^3)$
+--- proibitivo per $N$ grande.  Esistono diverse approssimazioni
+efficienti.
+
+\subsection{Approssimanti di Padé e forma di Cayley}
+
+Lo schema \CN{} è equivalente all'\emph{approssimante di Padé del
+primo ordine} dell'esponenziale di matrice:
+\begin{equation}
+  \ee^{-\ii\dt H} \;\approx\;
+  \frac{I - \ii\dt H/2}{I + \ii\dt H/2}
+  \;=\; A^{-1}B.
+  \label{eq:cayley}
+\end{equation}
+Questa è nota anche come \emph{forma di Cayley} del propagatore.
+È \emph{esattamente unitaria} indipendentemente da $\dt$, perché
+numeratore e denominatore sono coniugati complessi l'uno dell'altro
+(per $H$ hermitiano).
+
+Esistono approssimanti di Padé di ordine superiore $[m/m]$ che
+raggiungono un'accuratezza $\mathcal{O}(\dt^{2m})$ pur rimanendo
+unitari, ma richiedono la soluzione di $m$ sistemi tridiagonali per
+passo e sono raramente usati in pratica.
+
+\subsection{Splitting di Strang}
+
+Per hamiltoniani della forma $H = T + V$ dove $T$ è l'operatore
+cinetico e $V$ è diagonale nello spazio delle posizioni, il metodo
+\emph{split-operator} (splitting di Strang) approssima:
+\begin{equation}
+  \ee^{-\ii\dt(T+V)} \;\approx\;
+  \ee^{-\ii\dt V/2}\,\ee^{-\ii\dt T}\,\ee^{-\ii\dt V/2}
+  + \mathcal{O}(\dt^3).
+\end{equation}
+Ogni fattore può essere applicato efficientemente:
+$\ee^{-\ii\dt V/2}$ è una moltiplicazione puntuale nello spazio delle
+posizioni (diagonale), mentre $\ee^{-\ii\dt T}$ è una moltiplicazione
+nello spazio dei momenti (di Fourier).  Usando la Trasformata di
+Fourier Veloce (FFT), ogni passo costa $\mathcal{O}(N\log N)$, rispetto
+a $\mathcal{O}(N)$ per l'algoritmo di Thomas \CN{}.  Tuttavia, il
+metodo split-operator è del secondo ordine ed esattamente unitario
+solo nel limite dell'aritmetica esatta, e richiede FFT globali più
+difficili da parallelizzare.
+
+% ───────────────────────────────────────────────────────────────────────────
+\section{Teoria dello scattering: matrice S e tempo di ritardo di Wigner}
+\label{app:scattering}
+% ───────────────────────────────────────────────────────────────────────────
+
+\subsection{La matrice di scattering}
+
+Per un potenziale che si annulla per $x \to \pm\infty$, la teoria
+dello scattering descrive la relazione asintotica tra onde piane
+incidenti e uscenti.  In 1D, la \emph{matrice S} è una matrice
+unitaria $2\times 2$:
+\begin{equation}
+  S \;=\;
+  \begin{pmatrix}
+    t   & r' \\
+    r   & t'
+  \end{pmatrix},
+\end{equation}
+dove $t, t'$ sono le ampiezze di trasmissione (incidenza da destra e
+da sinistra) e $r, r'$ sono le ampiezze di riflessione.  L'unitarietà
+$S^\dagger S = I$ implica $|t|^2 + |r|^2 = 1$, cioè $T + R = 1$.
+
+Per un potenziale simmetrico (pari $V(x)$), $t = t'$ e $|r| = |r'|$.
+La barriera rettangolare è simmetrica rispetto al suo centro, quindi
+entrambe le ampiezze di trasmissione sono uguali.
+
+\subsection{Sfasamenti e tempi di ritardo}
+
+L'ampiezza di trasmissione può essere scritta come
+$t = \sqrt{T}\,\ee^{\ii\varphi_t(k)}$, dove $\varphi_t$ è la fase
+di trasmissione.  Il \emph{tempo di ritardo di Wigner--Smith} è
+definito come
+\begin{equation}
+  \tau(k) \;=\; \frac{d\varphi_t}{d\omega}
+  \;=\; \frac{1}{v_g}\frac{d\varphi_t}{dk},
+  \label{eq:wigner}
+\end{equation}
+e rappresenta il tempo extra trascorso dal pacchetto d'onda trasmesso
+in prossimità della barriera rispetto alla propagazione libera
+\cite{Wigner1955}.  Per la barriera rettangolare nel regime di
+tunnelling, $\tau > 0$ (il pacchetto è ritardato), e per
+$V_0 \to \infty$ il ritardo satura a
+$\tau_\text{max} = w/v_g$ --- il cosiddetto \emph{effetto Hartman},
+in cui il ritardo diventa indipendente dalla larghezza della barriera
+per barriere opache.
+
+Nella simulazione, il ritardo si manifesta come una riduzione della
+pendenza di $\langle x\rangle(t)$ durante l'evento di scattering
+(Pannello C di \texttt{analysis.png}).
+
+\subsection{Il teorema ottico in 1D}
+
+Il teorema ottico in 1D mette in relazione l'ampiezza di scattering
+in avanti con la sezione d'urto totale.  In una dimensione, la
+``sezione d'urto'' è sostituita dalla \emph{riflettanza totale}, e
+il teorema afferma:
+\begin{equation}
+  \mathrm{Im}(r) + \frac{k}{2}(T-1) = 0,
+\end{equation}
+che è una conseguenza diretta dell'unitarietà della matrice S e
+fornisce un ulteriore controllo di consistenza per i calcoli di
+scattering numerici.
+
+% ───────────────────────────────────────────────────────────────────────────
+\section{Analisi di stabilità di von Neumann}
+\label{app:stability}
+% ───────────────────────────────────────────────────────────────────────────
+
+\subsection{Analisi di von Neumann per la TDSE}
+
+La stabilità degli schemi alle differenze finite per PDE lineari
+può essere analizzata rigorosamente tramite il metodo di von Neumann
+(di Fourier).  Si consideri una griglia uniforme e un singolo modo
+di Fourier $\psi_j^n = g^n\,\ee^{\ii j\xi\dx}$, dove $\xi$ è il
+vettore d'onda e $g$ è il fattore di amplificazione.  La stabilità
+richiede $|g| \leq 1$ per tutti i $\xi$.
+
+\paragraph{Eulero in avanti (esplicito):}
+Sostituendo in $\psi_j^{n+1} = \psi_j^n - \ii\dt H_\text{disc}\psi_j^n$
+si ottiene
+\begin{equation}
+  g \;=\; 1 - \ii\dt\,\lambda(\xi),
+  \quad \lambda(\xi) = \frac{2(1-\cos(\xi\dx))}{\dx^2} + V \in \mathbb{R}.
+\end{equation}
+Allora $|g|^2 = 1 + \dt^2\lambda^2 > 1$ per $\lambda \neq 0$: lo
+schema è \emph{sempre instabile} per l'equazione di Schr\"{o}dinger.
+
+\paragraph{Crank--Nicolson:}
+Il fattore di amplificazione è
+\begin{equation}
+  g \;=\; \frac{1 - \ii\dt\lambda/2}{1 + \ii\dt\lambda/2}.
+\end{equation}
+Poiché $\lambda \in \mathbb{R}$, si ha $|g|^2 = 1$ identicamente
+per tutti i $\xi$ e per tutti i $\dt > 0$: lo schema è
+\emph{incondizionatamente stabile} e, inoltre, \emph{esattamente
+conservativo della norma} a livello del fattore di amplificazione.
+
+\paragraph{Regola del punto medio implicita (\CN{} come caso particolare):}
+Più in generale, il metodo $\theta$
+\begin{equation}
+  \ii\frac{\psi^{n+1}-\psi^n}{\dt} \;=\;
+  (1-\theta)H\psi^n + \theta H\psi^{n+1}
+\end{equation}
+è stabile per $\theta \geq 1/2$.  Lo schema di \CN{} corrisponde
+a $\theta = 1/2$ ed è l'unica scelta in questa famiglia che sia sia
+stabile che del secondo ordine.
+
+\subsection{Dispersione numerica}
+
+Sebbene lo schema \CN{} sia incondizionatamente stabile, introduce
+un \emph{errore di dispersione numerica}: la velocità di fase discreta
+$\tilde{\omega}(\xi)$ differisce da quella esatta
+$\omega(\xi) = \xi^2/2$.  Dal fattore di amplificazione,
+\begin{equation}
+  \tilde{\omega}(\xi) \;=\;
+  \frac{2}{\dt}\arctan\!\left(\frac{\dt\,\lambda(\xi)}{2}\right),
+  \quad
+  \lambda(\xi) = \frac{2(1-\cos\xi\dx)}{\dx^2}.
+\end{equation}
+Espandendo per piccoli $\xi\dx$ e $\dt$:
+\begin{equation}
+  \tilde{\omega}(\xi) \;=\; \frac{\xi^2}{2}
+  \left[1 - \frac{(\xi\dx)^2}{12} - \frac{\dt^2\xi^4}{24} + \ldots\right],
+\end{equation}
+mostrando errori di dispersione $\mathcal{O}(\dx^2, \dt^2)$, coerenti
+con l'accuratezza del secondo ordine dello schema.  Le componenti ad
+alto $k$ del pacchetto d'onda viaggiano a una velocità leggermente
+errata --- questa è l'origine fisica dell'\emph{allargamento numerico}
+che si somma all'allargamento quantistico fisico.
+
+% ───────────────────────────────────────────────────────────────────────────
+\section{Teorema di Ehrenfest e corrispondenza quantistico-classica}
+\label{app:ehrenfest}
+% ───────────────────────────────────────────────────────────────────────────
+
+\subsection{Enunciato e derivazione}
+
+Il \emph{teorema di Ehrenfest} stabilisce la connessione tra i valori
+di aspettazione quantistici e le equazioni classiche del moto.  Per
+qualsiasi osservabile $\hat{A}$, l'equazione del moto di Heisenberg è:
+\begin{equation}
+  \frac{d}{dt}\langle\hat{A}\rangle \;=\;
+  \frac{1}{\ii\hbar}\langle[\hat{A},\hat{H}]\rangle
+  + \left\langle\pdv{\hat{A}}{t}\right\rangle.
+\end{equation}
+Applicando questo a $\hat{x}$ e $\hat{p}$ con
+$\hat{H} = \hat{p}^2/2m + V(\hat{x})$:
+\begin{align}
+  \frac{d\langle\hat{x}\rangle}{dt}
+  &= \frac{\langle\hat{p}\rangle}{m}, \label{eq:ehr1} \\
+  \frac{d\langle\hat{p}\rangle}{dt}
+  &= -\left\langle\frac{\partial V}{\partial x}\right\rangle. \label{eq:ehr2}
+\end{align}
+Queste sono gli analoghi quantistici delle equazioni di Hamilton.
+Si noti la differenza cruciale rispetto al risultato classico:
+la \eqref{eq:ehr2} coinvolge $\langle V'(\hat{x})\rangle$, non
+$V'(\langle\hat{x}\rangle)$.  Le due coincidono solo se $V$ è al
+più quadratico, o se il pacchetto d'onda è così stretto da approssimare
+$\psi(x,t) \approx \delta(x - x_\text{cl}(t))$.
+
+\subsection{Implicazioni per la simulazione}
+
+Nella fase iniziale di propagazione, il pacchetto d'onda è stretto
+rispetto alla scala su cui varia $V$ (la barriera), quindi il teorema
+di Ehrenfest predice un moto quasi classico:
+$\langle x\rangle(t) \approx x_0 + k_0 t$.  Questo è esattamente
+il regime lineare visibile nel Pannello C prima dell'evento di
+scattering.
+
+Quando il pacchetto interagisce con la barriera,
+$\langle V'\rangle \neq V'(\langle x\rangle)$, l'approssimazione
+classica si rompe e dominano gli effetti quantistici (tunnelling,
+interferenza).  Dopo lo scattering, la funzione d'onda consiste di
+due pacchetti ben separati, e $\langle x\rangle$ diventa una media
+pesata che non ha alcun corrispondente classico.
+
+\subsection{Conservazione dell'energia}
+
+Dal teorema di Ehrenfest, l'energia media $\langle\hat{H}\rangle$ è
+conservata:
+\begin{equation}
+  \frac{d}{dt}\langle\hat{H}\rangle \;=\;
+  \frac{1}{\ii\hbar}\langle[\hat{H},\hat{H}]\rangle = 0.
+\end{equation}
+Nella simulazione numerica, la conservazione dell'energia non è
+imposta esplicitamente dallo schema \CN{} (solo la norma è
+esattamente conservata).  Tuttavia, l'accuratezza del secondo ordine
+dello schema garantisce che la deriva energetica sia
+$\mathcal{O}(\dt^2)$ per passo.
+
+% ───────────────────────────────────────────────────────────────────────────
+\section{Condizioni al contorno assorbenti e strati perfettamente adattati}
+\label{app:abc}
+% ───────────────────────────────────────────────────────────────────────────
+
+\subsection{Il problema delle condizioni al contorno di Dirichlet}
+
+Le condizioni al contorno di Dirichlet
+$\psi(x_\text{min}) = \psi(x_\text{max}) = 0$ simulano pareti
+infinitamente rigide.  Sono semplici da implementare ma introducono
+\emph{riflessioni spurie} non appena il pacchetto d'onda raggiunge
+il bordo.  Il dominio deve quindi essere sufficientemente grande
+affinché nessuna parte di $\psi$ raggiunga le pareti durante la
+simulazione --- un requisito che può rendere il problema costoso per
+tempi lunghi o pacchetti veloci.
+
+\subsection{Condizioni al contorno assorbenti}
+
+Un'alternativa più efficiente è modificare l'hamiltoniano in
+prossimità dei bordi aggiungendo un potenziale immaginario negativo
+(assorbimento):
+\begin{equation}
+  V(x) \;\to\; V(x) - \ii\,\Gamma(x),
+  \quad \Gamma(x) \geq 0,
+\end{equation}
+dove $\Gamma(x)$ è grande solo in prossimità dei bordi del dominio.
+Questo rende l'hamiltoniano \emph{non hermitiano} nella regione
+assorbente, causando la diminuzione della norma man mano che la
+probabilità viene assorbita.  L'onda numerica riflessa è
+soppressa esponenzialmente.
+
+Una scelta standard è la rampa coseno:
+\begin{equation}
+  \Gamma(x) \;=\;
+  \Gamma_0\,\sin^2\!\left(\frac{\pi}{2}
+  \cdot\frac{|x|-x_\text{abs}}{L_\text{abs}}\right)
+  \quad \text{per } |x| > x_\text{abs},
+\end{equation}
+dove $L_\text{abs}$ e $\Gamma_0$ sono rispettivamente la larghezza
+e l'intensità dello strato assorbente.
+
+\subsection{Strati perfettamente adattati}
+
+Lo standard di riferimento per i bordi assorbenti è lo
+\emph{strato perfettamente adattato} (Perfectly Matched Layer, PML),
+originariamente sviluppato per le equazioni di Maxwell
+\cite{NumericalRecipes} e successivamente adattato alla TDSE.
+Un PML è costruito proseguendo analiticamente la coordinata spaziale
+nel piano complesso:
+\begin{equation}
+  x \;\to\; \tilde{x}(x) \;=\; x + \ii\int_0^x \sigma(x')\,dx',
+\end{equation}
+dove $\sigma(x') \geq 0$ è il profilo di assorbimento del PML.
+Questa trasformazione preserva la forma dell'equazione di
+Schr\"{o}dinger nella regione PML rendendo evanescenti tutte le onde
+uscenti --- e crucialmente, \emph{senza creare alcuna riflessione
+all'interfaccia PML}, indipendentemente dall'angolo o dalla frequenza
+dell'onda incidente.
+
+Per la TDSE 1D, la modifica PML è equivalente all'introduzione di un
+fattore di allungamento delle coordinate complesse $s(x)$:
+\begin{equation}
+  \Htop_\text{PML} \;=\;
+  -\frac{1}{2s(x)}\frac{\partial}{\partial x}\frac{1}{s(x)}\frac{\partial}{\partial x}
+  + V(x),
+  \quad s(x) = 1 + \ii\sigma(x)/\omega.
+\end{equation}
+La simulazione corrente utilizza semplici BC di Dirichlet, sufficienti
+per i parametri predefiniti.  L'implementazione di BC assorbenti
+consentirebbe simulazioni su domini molto più piccoli o per tempi
+molto più lunghi.
+
+\end{document}

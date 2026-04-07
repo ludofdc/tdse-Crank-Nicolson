@@ -1,0 +1,85 @@
+\babel@toc {english}{}\relax 
+\contentsline {section}{\numberline {1}Introduction}{3}{section.1}%
+\contentsline {section}{\numberline {2}Physical setup}{3}{section.2}%
+\contentsline {subsection}{\numberline {2.1}The time-dependent Schr\"{o}dinger equation}{3}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Physical interpretation of the wave function}{3}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}The Gaussian wave packet}{4}{subsection.2.3}%
+\contentsline {subsection}{\numberline {2.4}The rectangular potential barrier}{4}{subsection.2.4}%
+\contentsline {section}{\numberline {3}Quantum tunnelling}{5}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Stationary analysis}{5}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Wave-packet dynamics}{5}{subsection.3.2}%
+\contentsline {section}{\numberline {4}Numerical method}{6}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Spatial discretisation}{6}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Time discretisation: the Crank--Nicolson scheme}{6}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Properties of the Crank--Nicolson scheme}{7}{subsection.4.3}%
+\contentsline {paragraph}{Unconditional stability.}{7}{section*.2}%
+\contentsline {paragraph}{Norm (probability) conservation.}{7}{section*.3}%
+\contentsline {paragraph}{Second-order accuracy.}{7}{section*.4}%
+\contentsline {subsection}{\numberline {4.4}Matrix structure}{7}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}The Thomas algorithm}{8}{subsection.4.5}%
+\contentsline {paragraph}{Forward sweep}{8}{section*.5}%
+\contentsline {paragraph}{Back substitution}{8}{section*.6}%
+\contentsline {subsection}{\numberline {4.6}Boundary conditions}{9}{subsection.4.6}%
+\contentsline {subsection}{\numberline {4.7}Algorithm summary}{9}{subsection.4.7}%
+\contentsline {section}{\numberline {5}Analysis of the simulation output}{9}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Snapshot plot (\texttt {snapshots.png})}{10}{subsection.5.1}%
+\contentsline {paragraph}{What is shown.}{10}{section*.7}%
+\contentsline {paragraph}{Expected behaviour.}{10}{section*.8}%
+\contentsline {paragraph}{What to look for.}{11}{section*.9}%
+\contentsline {subsection}{\numberline {5.2}Quantitative analysis plot (\texttt {analysis.png})}{11}{subsection.5.2}%
+\contentsline {subsubsection}{\numberline {5.2.1}Panel A: Norm conservation}{11}{subsubsection.5.2.1}%
+\contentsline {paragraph}{What is shown.}{11}{section*.10}%
+\contentsline {paragraph}{Expected behaviour.}{11}{section*.11}%
+\contentsline {paragraph}{What to look for.}{11}{section*.12}%
+\contentsline {subsubsection}{\numberline {5.2.2}Panel B: Transmission and reflection coefficients}{11}{subsubsection.5.2.2}%
+\contentsline {paragraph}{What is shown.}{11}{section*.13}%
+\contentsline {paragraph}{Expected behaviour.}{11}{section*.14}%
+\contentsline {paragraph}{What to look for.}{12}{section*.15}%
+\contentsline {subsubsection}{\numberline {5.2.3}Panel C: Mean position $\langle x \rangle (t)$}{12}{subsubsection.5.2.3}%
+\contentsline {paragraph}{What is shown.}{12}{section*.16}%
+\contentsline {paragraph}{Expected behaviour.}{12}{section*.17}%
+\contentsline {paragraph}{What to look for.}{12}{section*.18}%
+\contentsline {subsubsection}{\numberline {5.2.4}Panel D: Packet width $\sigma (t)$}{12}{subsubsection.5.2.4}%
+\contentsline {paragraph}{What is shown.}{12}{section*.19}%
+\contentsline {paragraph}{Expected behaviour.}{12}{section*.20}%
+\contentsline {paragraph}{What to look for.}{13}{section*.21}%
+\contentsline {subsection}{\numberline {5.3}Animation (\texttt {evolution.mp4})}{13}{subsection.5.3}%
+\contentsline {paragraph}{Expected behaviour.}{13}{section*.22}%
+\contentsline {section}{\numberline {6}Numerical parameters: stability and accuracy}{13}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Grid resolution requirements}{13}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Courant number}{14}{subsection.6.2}%
+\contentsline {section}{\numberline {7}Conclusions}{14}{section.7}%
+\contentsline {section}{\numberline {A}The quantum state space and Dirac formalism}{16}{appendix.A}%
+\contentsline {subsection}{\numberline {A.1}Hilbert space structure}{16}{subsection.A.1}%
+\contentsline {subsection}{\numberline {A.2}Observables as self-adjoint operators}{16}{subsection.A.2}%
+\contentsline {subsection}{\numberline {A.3}The canonical commutation relation}{16}{subsection.A.3}%
+\contentsline {subsection}{\numberline {A.4}Time evolution operator and unitarity}{17}{subsection.A.4}%
+\contentsline {section}{\numberline {B}Transfer matrix method and exact tunnelling formulae}{17}{appendix.B}%
+\contentsline {subsection}{\numberline {B.1}Piecewise solution of the stationary Schr\"{o}dinger equation}{17}{subsection.B.1}%
+\contentsline {subsection}{\numberline {B.2}The transfer matrix}{18}{subsection.B.2}%
+\contentsline {subsection}{\numberline {B.3}WKB approximation}{18}{subsection.B.3}%
+\contentsline {section}{\numberline {C}Dispersion relation and free-packet dynamics}{18}{appendix.C}%
+\contentsline {subsection}{\numberline {C.1}Dispersion relation}{18}{subsection.C.1}%
+\contentsline {subsection}{\numberline {C.2}Exact free-propagation of the Gaussian packet}{19}{subsection.C.2}%
+\contentsline {section}{\numberline {D}Operator splitting and the Cayley form}{20}{appendix.D}%
+\contentsline {subsection}{\numberline {D.1}The exact propagator as a matrix exponential}{20}{subsection.D.1}%
+\contentsline {subsection}{\numberline {D.2}Padé approximants and the Cayley form}{20}{subsection.D.2}%
+\contentsline {subsection}{\numberline {D.3}Strang splitting}{20}{subsection.D.3}%
+\contentsline {section}{\numberline {E}Scattering theory: S-matrix and Wigner delay time}{21}{appendix.E}%
+\contentsline {subsection}{\numberline {E.1}The scattering matrix}{21}{subsection.E.1}%
+\contentsline {subsection}{\numberline {E.2}Phase shifts and time delays}{21}{subsection.E.2}%
+\contentsline {subsection}{\numberline {E.3}The optical theorem in 1D}{21}{subsection.E.3}%
+\contentsline {section}{\numberline {F}Von Neumann stability analysis}{22}{appendix.F}%
+\contentsline {subsection}{\numberline {F.1}Von Neumann analysis for the TDSE}{22}{subsection.F.1}%
+\contentsline {paragraph}{Forward Euler (explicit):}{22}{section*.24}%
+\contentsline {paragraph}{Crank--Nicolson:}{22}{section*.25}%
+\contentsline {paragraph}{Implicit mid-point rule (Crank--Nicolson is a special case):}{22}{section*.26}%
+\contentsline {subsection}{\numberline {F.2}Numerical dispersion}{22}{subsection.F.2}%
+\contentsline {section}{\numberline {G}Ehrenfest's theorem and quantum-classical correspondence}{23}{appendix.G}%
+\contentsline {subsection}{\numberline {G.1}Statement and derivation}{23}{subsection.G.1}%
+\contentsline {subsection}{\numberline {G.2}Implications for the simulation}{23}{subsection.G.2}%
+\contentsline {subsection}{\numberline {G.3}Energy conservation}{24}{subsection.G.3}%
+\contentsline {section}{\numberline {H}Absorbing boundary conditions and perfectly matched layers}{24}{appendix.H}%
+\contentsline {subsection}{\numberline {H.1}The problem with Dirichlet boundaries}{24}{subsection.H.1}%
+\contentsline {subsection}{\numberline {H.2}Absorbing boundary conditions}{24}{subsection.H.2}%
+\contentsline {subsection}{\numberline {H.3}Perfectly matched layers}{24}{subsection.H.3}%

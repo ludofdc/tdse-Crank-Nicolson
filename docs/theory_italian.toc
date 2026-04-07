@@ -1,0 +1,86 @@
+\babel@toc {italian}{}\relax 
+\babel@toc {italian}{}\relax 
+\contentsline {section}{\numberline {1}Introduzione}{3}{section.1}%
+\contentsline {section}{\numberline {2}Impostazione fisica}{3}{section.2}%
+\contentsline {subsection}{\numberline {2.1}L'equazione di Schr\"{o}dinger dipendente dal tempo}{3}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Interpretazione fisica della funzione d'onda}{4}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}Il pacchetto d'onde gaussiano}{4}{subsection.2.3}%
+\contentsline {subsection}{\numberline {2.4}La barriera di potenziale rettangolare}{5}{subsection.2.4}%
+\contentsline {section}{\numberline {3}Effetto tunnel quantistico}{5}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Analisi stazionaria}{5}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Dinamica del pacchetto d'onde}{6}{subsection.3.2}%
+\contentsline {section}{\numberline {4}Metodo numerico}{6}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Discretizzazione spaziale}{6}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Discretizzazione temporale: lo schema di Crank--Nicolson}{7}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Proprietà dello schema di Crank--Nicolson}{7}{subsection.4.3}%
+\contentsline {paragraph}{Stabilità incondizionata.}{7}{section*.2}%
+\contentsline {paragraph}{Conservazione della norma (probabilità).}{7}{section*.3}%
+\contentsline {paragraph}{Accuratezza del secondo ordine.}{7}{section*.4}%
+\contentsline {subsection}{\numberline {4.4}Struttura delle matrici}{8}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}L'algoritmo di Thomas}{8}{subsection.4.5}%
+\contentsline {paragraph}{Passata in avanti}{8}{section*.5}%
+\contentsline {paragraph}{Sostituzione all'indietro}{8}{section*.6}%
+\contentsline {subsection}{\numberline {4.6}Condizioni al contorno}{9}{subsection.4.6}%
+\contentsline {subsection}{\numberline {4.7}Schema dell'algoritmo}{9}{subsection.4.7}%
+\contentsline {section}{\numberline {5}Analisi dell'output della simulazione}{9}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Grafico delle istantanee (\texttt {snapshots.png})}{10}{subsection.5.1}%
+\contentsline {paragraph}{Cosa viene mostrato.}{10}{section*.7}%
+\contentsline {paragraph}{Comportamento atteso.}{10}{section*.8}%
+\contentsline {paragraph}{Cosa osservare.}{11}{section*.9}%
+\contentsline {subsection}{\numberline {5.2}Grafico dell'analisi quantitativa (\texttt {analysis.png})}{11}{subsection.5.2}%
+\contentsline {subsubsection}{\numberline {5.2.1}Pannello A: Conservazione della norma}{11}{subsubsection.5.2.1}%
+\contentsline {paragraph}{Cosa viene mostrato.}{11}{section*.10}%
+\contentsline {paragraph}{Comportamento atteso.}{11}{section*.11}%
+\contentsline {paragraph}{Cosa osservare.}{11}{section*.12}%
+\contentsline {subsubsection}{\numberline {5.2.2}Pannello B: Coefficienti di trasmissione e riflessione}{11}{subsubsection.5.2.2}%
+\contentsline {paragraph}{Cosa viene mostrato.}{11}{section*.13}%
+\contentsline {paragraph}{Comportamento atteso.}{11}{section*.14}%
+\contentsline {paragraph}{Cosa osservare.}{12}{section*.15}%
+\contentsline {subsubsection}{\numberline {5.2.3}Pannello C: Posizione media $\langle x \rangle (t)$}{12}{subsubsection.5.2.3}%
+\contentsline {paragraph}{Cosa viene mostrato.}{12}{section*.16}%
+\contentsline {paragraph}{Comportamento atteso.}{12}{section*.17}%
+\contentsline {paragraph}{Cosa osservare.}{12}{section*.18}%
+\contentsline {subsubsection}{\numberline {5.2.4}Pannello D: Larghezza del pacchetto $\sigma (t)$}{12}{subsubsection.5.2.4}%
+\contentsline {paragraph}{Cosa viene mostrato.}{12}{section*.19}%
+\contentsline {paragraph}{Comportamento atteso.}{12}{section*.20}%
+\contentsline {paragraph}{Cosa osservare.}{13}{section*.21}%
+\contentsline {subsection}{\numberline {5.3}Animazione (\texttt {evolution.mp4})}{13}{subsection.5.3}%
+\contentsline {paragraph}{Comportamento atteso.}{13}{section*.22}%
+\contentsline {section}{\numberline {6}Parametri numerici: stabilità e accuratezza}{13}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Requisiti di risoluzione della griglia}{13}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Numero di Courant}{14}{subsection.6.2}%
+\contentsline {section}{\numberline {7}Conclusioni}{14}{section.7}%
+\contentsline {section}{\numberline {A}Lo spazio degli stati quantistici e il formalismo di Dirac}{16}{appendix.Alph1}%
+\contentsline {subsection}{\numberline {A.1}Struttura dello spazio di Hilbert}{16}{subsection.Alph1.1}%
+\contentsline {subsection}{\numberline {A.2}Osservabili come operatori autoaggiunti}{16}{subsection.Alph1.2}%
+\contentsline {subsection}{\numberline {A.3}La relazione di commutazione canonica}{16}{subsection.Alph1.3}%
+\contentsline {subsection}{\numberline {A.4}Operatore di evoluzione temporale e unitarietà}{17}{subsection.Alph1.4}%
+\contentsline {section}{\numberline {B}Metodo della matrice di trasferimento e formule esatte per il tunnel}{17}{appendix.Alph2}%
+\contentsline {subsection}{\numberline {B.1}Soluzione a tratti dell'equazione di Schr\"{o}dinger stazionaria}{17}{subsection.Alph2.1}%
+\contentsline {subsection}{\numberline {B.2}La matrice di trasferimento}{17}{subsection.Alph2.2}%
+\contentsline {subsection}{\numberline {B.3}Approssimazione WKB}{18}{subsection.Alph2.3}%
+\contentsline {section}{\numberline {C}Relazione di dispersione e dinamica del pacchetto libero}{18}{appendix.Alph3}%
+\contentsline {subsection}{\numberline {C.1}Relazione di dispersione}{18}{subsection.Alph3.1}%
+\contentsline {subsection}{\numberline {C.2}Propagazione esatta del pacchetto gaussiano nello spazio libero}{19}{subsection.Alph3.2}%
+\contentsline {section}{\numberline {D}Splitting degli operatori e la forma di Cayley}{20}{appendix.Alph4}%
+\contentsline {subsection}{\numberline {D.1}Il propagatore esatto come esponenziale di matrice}{20}{subsection.Alph4.1}%
+\contentsline {subsection}{\numberline {D.2}Approssimanti di Padé e la forma di Cayley}{20}{subsection.Alph4.2}%
+\contentsline {subsection}{\numberline {D.3}Splitting di Strang}{20}{subsection.Alph4.3}%
+\contentsline {section}{\numberline {E}Teoria dello scattering: matrice S e tempo di ritardo di Wigner}{21}{appendix.Alph5}%
+\contentsline {subsection}{\numberline {E.1}La matrice di scattering}{21}{subsection.Alph5.1}%
+\contentsline {subsection}{\numberline {E.2}Sfasamenti e ritardi temporali}{21}{subsection.Alph5.2}%
+\contentsline {subsection}{\numberline {E.3}Il teorema ottico in 1D}{21}{subsection.Alph5.3}%
+\contentsline {section}{\numberline {F}Analisi di stabilità di von Neumann}{22}{appendix.Alph6}%
+\contentsline {subsection}{\numberline {F.1}Analisi di von Neumann per la TDSE}{22}{subsection.Alph6.1}%
+\contentsline {paragraph}{Eulero in avanti (esplicito):}{22}{section*.24}%
+\contentsline {paragraph}{Crank--Nicolson:}{22}{section*.25}%
+\contentsline {paragraph}{Regola del punto medio implicita (Crank--Nicolson è un caso speciale):}{22}{section*.26}%
+\contentsline {subsection}{\numberline {F.2}Dispersione numerica}{22}{subsection.Alph6.2}%
+\contentsline {section}{\numberline {G}Il teorema di Ehrenfest e la corrispondenza quantistico-classica}{23}{appendix.Alph7}%
+\contentsline {subsection}{\numberline {G.1}Enunciato e dimostrazione}{23}{subsection.Alph7.1}%
+\contentsline {subsection}{\numberline {G.2}Implicazioni per la simulazione}{23}{subsection.Alph7.2}%
+\contentsline {subsection}{\numberline {G.3}Conservazione dell'energia}{24}{subsection.Alph7.3}%
+\contentsline {section}{\numberline {H}Condizioni al contorno assorbenti e perfectly matched layers}{24}{appendix.Alph8}%
+\contentsline {subsection}{\numberline {H.1}Il problema con le condizioni al contorno di Dirichlet}{24}{subsection.Alph8.1}%
+\contentsline {subsection}{\numberline {H.2}Condizioni al contorno assorbenti}{24}{subsection.Alph8.2}%
+\contentsline {subsection}{\numberline {H.3}Perfectly matched layers}{25}{subsection.Alph8.3}%

@@ -93,6 +93,26 @@ The domain is chosen large enough that the wave packet does not reach the bounda
 
 ---
 
+## Results
+
+### Wave packet evolution
+
+The wave packet starts localised on the left, travels toward the rectangular barrier, and partially reflects and tunnels through it.
+
+![Wave packet snapshots](docs/figures/snapshots.png)
+
+### Full time evolution (animation)
+
+![Evolution animation](docs/figures/evolution.gif)
+
+### Quantitative analysis
+
+The four panels show: (A) norm conservation ∫|ψ|² dx ≈ 1 throughout; (B) transmission T and reflection R coefficients; (C) mean position ⟨x⟩(t); (D) wave packet width σ(t).
+
+![Quantitative analysis](docs/figures/analysis.png)
+
+---
+
 ## Project structure
 
 ```
